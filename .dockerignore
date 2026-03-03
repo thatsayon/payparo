@@ -1,0 +1,54 @@
+# Git
+.git
+.gitignore
+
+# Environment
+.env
+.env.*
+venv
+.venv
+env
+ENV
+
+# Python
+__pycache__
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+*.egg-info
+.eggs
+build
+dist
+
+# Database
+db.sqlite3
+
+# Django
+media
+staticfiles
+
+# Logs
+*.log
+logs
+
+# Testing
+.coverage
+htmlcov
+.pytest_cache
+.mypy_cache
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Node (future-safe)
+node_modules
+npm-debug.log
+yarn-error.log
