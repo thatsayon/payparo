@@ -40,3 +40,25 @@ class LoginSerializer(serializers.Serializer):
 class UpdatePasswordSerializer(serializers.Serializer):
     current_password = serializers.CharField()
     new_password = serializers.CharField(min_length=4)
+
+
+class IDCardUploadSerializer(serializers.Serializer):
+    id_front = serializers.ImageField(required=True)
+    id_back = serializers.ImageField(required=True)
+
+
+class KYCIdentitySerializer(serializers.Serializer):
+    id_number = serializers.CharField(max_length=50)
+    full_name = serializers.CharField(max_length=120)
+    father_name = serializers.CharField(max_length=120)
+    mother_name = serializers.CharField(max_length=120)
+    date_of_birth = serializers.DateField()
+    present_address = serializers.CharField()
+    permanent_address = serializers.CharField()
+    gender = serializers.CharField(max_length=10)
+
+
+class FaceImageUploadSerializer(serializers.Serializer):
+    front_face = serializers.ImageField(required=True, help_text="Straight-on front face photo")
+    left_face  = serializers.ImageField(required=True, help_text="Back/left side face photo")
+    right_face = serializers.ImageField(required=True, help_text="Right side face photo")

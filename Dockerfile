@@ -10,9 +10,11 @@ WORKDIR /app
 # Install system dependencies
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
-       build-essential \
-       libpq-dev \
-       gcc \
+    build-essential \
+    libpq-dev \
+    gcc \
+    tesseract-ocr \
+    tesseract-ocr-eng \
     && rm -rf /var/lib/apt/lists/*
 
 # Install python dependencies

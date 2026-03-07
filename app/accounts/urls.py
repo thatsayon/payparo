@@ -14,6 +14,9 @@ from .views import (
     RefreshAccessTokenView,
     UpdatePasswordView,
     DeleteAccountView,
+    KYCUploadIDCardView,
+    KYCPublishView,
+    KYCUploadFaceView,
 )
 
 urlpatterns = [
@@ -39,4 +42,9 @@ urlpatterns = [
     # Account management
     path("update-password/", UpdatePasswordView.as_view(), name="update-password"),
     path("delete-account/", DeleteAccountView.as_view(), name="delete-account"),
+
+    # KYC
+    path("kyc/upload-id/", KYCUploadIDCardView.as_view(), name="kyc-upload-id"),
+    path("kyc/publish/", KYCPublishView.as_view(), name="kyc-publish"),
+    path("kyc/upload-face/", KYCUploadFaceView.as_view(), name="kyc-upload-face"),
 ]

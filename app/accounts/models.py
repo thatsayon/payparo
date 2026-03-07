@@ -151,3 +151,75 @@ class OTP(BaseModel):
 
     def __str__(self):
         return f"OTP for {self.user.email}"
+
+class KYCSubmission(BaseModel):
+
+    class Status(models.TextChoices):
+        PENDING = "pending", "Pending"
+        UNDER_REVIEW = "under_review", "Under Review"
+        APPROVED = "approved", "Approved"
+        REJECTED = "rejected", "Rejected"
+
+    user = models.ForeignKey(
+        UserAccount,
+        on_delete=models.CASCADE,
+        related_name="kyc_submissions"
+    )
+
+    status = models.CharField(
+        max_length=20,
+        choices=Status.choices,
+        default=Status.PENDING,
+        db_index=True
+    )
+
+    rejection_reason = models.TextField(blank=True)
+
+    submitted_at = models.DateTimeField(auto_now_add=True)
+    reviewed_at = models.DateTimeField(null=True, blank=True)
+
+class KYCDocument(models.Model):
+
+    class DocType(models.TextChoices):
+        ID_FRONT = "id_front"
+        ID_BACK = "id_back"
+        FACE_FRONT = "face_front"
+        FACE_LEFT = "face_left"
+        FACE_RIGHT = "face_right"
+
+    submission = models.ForeignKey(
+        KYCSubmission,
+        on_delete=models.CASCADE,
+        related_name="documents"
+    )
+
+    document_type = models.CharField(
+        max_length=20,
+        choices=DocType.choices
+    )
+
+    image = CloudinaryField()
+
+    uploaded_at = models.DateTimeField(auto_now_add=True)
+
+
+class KYCIdentity(models.Model):
+
+    submission = models.OneToOneField(
+        KYCSubmission,
+        on_delete=models.CASCADE,
+        related_name="identity"
+    )
+
+    id_number = models.CharField(max_length=50)
+    full_name = models.CharField(max_length=120)
+
+    father_name = models.CharField(max_length=120)
+    mother_name = models.CharField(max_length=120)
+
+    date_of_birth = models.DateField()
+
+    present_address = models.TextField()
+    permanent_address = models.TextField()
+
+    gender = models.CharField(max_length=10)

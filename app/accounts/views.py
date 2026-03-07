@@ -9,11 +9,15 @@ from django.db import transaction
 from django.utils.timezone import now
 from django.contrib.auth import authenticate, get_user_model
 
-from .models import OTP
+from rest_framework.parsers import MultiPartParser, FormParser
+from .models import OTP, KYCSubmission, KYCDocument, KYCIdentity
 from .serializers import (
     RegisterSerializer,
     LoginSerializer,
     UpdatePasswordSerializer,
+    IDCardUploadSerializer,
+    KYCIdentitySerializer,
+    FaceImageUploadSerializer,
 )
 from .utils import generate_otp, hash_otp, create_otp_token, decode_otp_token
 from .tokens import get_tokens_for_user
@@ -585,4 +589,249 @@ class DeleteAccountView(APIView):
         return Response(
             {"success": True, "message": "Account deleted permanently."},
             status=status.HTTP_200_OK,
+        )
+
+
+# ──────────────────────────────────────────────
+# KYC File Uploads
+# ──────────────────────────────────────────────
+
+class KYCUploadIDCardView(APIView):
+    """Upload ID card front and back images for KYC."""
+    permission_classes = [permissions.IsAuthenticated]
+    parser_classes = [MultiPartParser, FormParser]
+
+    def post(self, request):
+        if KYCSubmission.objects.filter(user=request.user, status=KYCSubmission.Status.APPROVED).exists():
+            return Response(
+                {"error": "KYC is already approved."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+            
+        if KYCSubmission.objects.filter(user=request.user, status=KYCSubmission.Status.UNDER_REVIEW).exists():
+            return Response(
+                {"error": "KYC is currently under review."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        serializer = IDCardUploadSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(
+                {"error": _first_error(serializer)},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Run OCR on the front image before it gets consumed by Cloudinary
+        from .kyc_ocr import extract_id_card_fields
+        extracted = extract_id_card_fields(serializer.validated_data["id_front"])
+
+        with transaction.atomic():
+            submission, _ = KYCSubmission.objects.get_or_create(
+                user=request.user,
+                status=KYCSubmission.Status.PENDING,
+            )
+            
+            # Remove any previously uploaded ID cards for this pending submission
+            KYCDocument.objects.filter(
+                submission=submission, 
+                document_type__in=[KYCDocument.DocType.ID_FRONT, KYCDocument.DocType.ID_BACK]
+            ).delete()
+            
+            KYCDocument.objects.create(
+                submission=submission,
+                document_type=KYCDocument.DocType.ID_FRONT,
+                image=serializer.validated_data["id_front"]
+            )
+            
+            KYCDocument.objects.create(
+                submission=submission,
+                document_type=KYCDocument.DocType.ID_BACK,
+                image=serializer.validated_data["id_back"]
+            )
+            
+        return Response(
+            {
+                "success": True,
+                "message": "ID card images uploaded successfully.",
+                "kyc_id": str(submission.id),
+                "extracted": extracted,
+            },
+            status=status.HTTP_201_CREATED,
+        )
+
+
+# ──────────────────────────────────────────────
+# KYC Publish (submit identity info)
+# ──────────────────────────────────────────────
+
+class KYCPublishView(APIView):
+    """
+    Submit KYC identity information for a previously uploaded ID card.
+    Marks the submission as UNDER_REVIEW and returns the submitted
+    identity details so the client can display a confirmation card.
+    """
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request):
+        # Must have a pending submission with uploaded ID images
+        submission = (
+            KYCSubmission.objects
+            .filter(user=request.user, status=KYCSubmission.Status.PENDING)
+            .first()
+        )
+        if not submission:
+            # Check if already under review / approved
+            if KYCSubmission.objects.filter(
+                user=request.user,
+                status=KYCSubmission.Status.UNDER_REVIEW,
+            ).exists():
+                return Response(
+                    {"error": "KYC is already submitted and under review."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            if KYCSubmission.objects.filter(
+                user=request.user,
+                status=KYCSubmission.Status.APPROVED,
+            ).exists():
+                return Response(
+                    {"error": "KYC is already approved."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            return Response(
+                {"error": "No pending KYC submission found. Please upload your ID card first."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Ensure at least the ID front and back images were uploaded
+        uploaded_types = set(
+            submission.documents
+            .values_list("document_type", flat=True)
+        )
+        required = {KYCDocument.DocType.ID_FRONT, KYCDocument.DocType.ID_BACK}
+        if not required.issubset(uploaded_types):
+            return Response(
+                {"error": "Please upload both the front and back of your ID card first."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        serializer = KYCIdentitySerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(
+                {"error": _first_error(serializer)},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        data = serializer.validated_data
+
+        with transaction.atomic():
+            # Upsert identity record
+            KYCIdentity.objects.update_or_create(
+                submission=submission,
+                defaults={
+                    "id_number": data["id_number"],
+                    "full_name": data["full_name"],
+                    "father_name": data["father_name"],
+                    "mother_name": data["mother_name"],
+                    "date_of_birth": data["date_of_birth"],
+                    "present_address": data["present_address"],
+                    "permanent_address": data["permanent_address"],
+                    "gender": data["gender"],
+                },
+            )
+
+            # Move submission to UNDER_REVIEW
+            submission.status = KYCSubmission.Status.UNDER_REVIEW
+            submission.save(update_fields=["status"])
+
+        return Response(
+            {
+                "success": True,
+                "message": "KYC submitted successfully. It is now under review.",
+                "kyc": {
+                    "kyc_id": str(submission.id),
+                    "status": submission.status,
+                    "id_number": data["id_number"],
+                    "full_name": data["full_name"],
+                    "father_name": data["father_name"],
+                    "mother_name": data["mother_name"],
+                    "date_of_birth": str(data["date_of_birth"]),
+                    "present_address": data["present_address"],
+                    "permanent_address": data["permanent_address"],
+                    "gender": data["gender"],
+                },
+            },
+            status=status.HTTP_200_OK,
+        )
+
+
+# ──────────────────────────────────────────────
+# KYC Face Image Upload
+# ──────────────────────────────────────────────
+
+class KYCUploadFaceView(APIView):
+    """
+    Upload three face images after KYC has been published (UNDER_REVIEW).
+
+    Fields:
+      front_face  — straight-on front face
+      left_face   — back / left-side face
+      right_face  — right-side face
+    """
+    permission_classes = [permissions.IsAuthenticated]
+    parser_classes = [MultiPartParser, FormParser]
+
+    def post(self, request):
+        submission = (
+            KYCSubmission.objects
+            .filter(user=request.user, status=KYCSubmission.Status.UNDER_REVIEW)
+            .first()
+        )
+        if not submission:
+            if KYCSubmission.objects.filter(
+                user=request.user,
+                status=KYCSubmission.Status.APPROVED,
+            ).exists():
+                return Response(
+                    {"error": "KYC is already approved."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            return Response(
+                {"error": "No submitted KYC found. Please complete kyc/publish/ first."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        serializer = FaceImageUploadSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(
+                {"error": _first_error(serializer)},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        face_map = {
+            KYCDocument.DocType.FACE_FRONT: serializer.validated_data["front_face"],
+            KYCDocument.DocType.FACE_LEFT:  serializer.validated_data["left_face"],
+            KYCDocument.DocType.FACE_RIGHT: serializer.validated_data["right_face"],
+        }
+
+        with transaction.atomic():
+            # Remove previous face uploads for this submission
+            KYCDocument.objects.filter(
+                submission=submission,
+                document_type__in=list(face_map.keys()),
+            ).delete()
+
+            for doc_type, image in face_map.items():
+                KYCDocument.objects.create(
+                    submission=submission,
+                    document_type=doc_type,
+                    image=image,
+                )
+
+        return Response(
+            {
+                "success": True,
+                "message": "Face images uploaded successfully.",
+                "kyc_id": str(submission.id),
+            },
+            status=status.HTTP_201_CREATED,
         )
