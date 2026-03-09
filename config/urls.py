@@ -15,6 +15,9 @@ urlpatterns = [
     # Auth
     path('api/auth/', include('app.accounts.urls')),
 
+    # Escrow
+    path('api/escrow/', include('app.escrow.urls')),
+
     # API Documentation
     path('api/schema/', SpectacularAPIView.as_view(), name='schema'),
     path('api/docs/', SpectacularSwaggerView.as_view(url_name='schema'), name='swagger-ui'),

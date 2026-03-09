@@ -26,7 +26,7 @@ RUN pip install --upgrade pip \
 COPY . /app/
 
 # Expose port
-EXPOSE 8000
+EXPOSE 9000
 
 # Run uvicorn server
-CMD ["uvicorn", "config.asgi:application", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+CMD ["uvicorn", "config.asgi:application", "--host", "0.0.0.0", "--port", "9000", "--reload"]
