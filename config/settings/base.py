@@ -48,6 +48,7 @@ INSTALLED_APPS += [
 INSTALLED_APPS += [
     'app.accounts',
     'app.common',
+    'app.excrow',
 ]
 
 MIDDLEWARE = [

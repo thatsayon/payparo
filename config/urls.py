@@ -16,7 +16,7 @@ urlpatterns = [
     path('api/auth/', include('app.accounts.urls')),
 
     # Escrow
-    path('api/escrow/', include('app.escrow.urls')),
+    path('api/excrow/', include('app.excrow.urls')),
 
     # API Documentation
     path('api/schema/', SpectacularAPIView.as_view(), name='schema'),
