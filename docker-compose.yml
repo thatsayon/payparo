@@ -41,5 +41,31 @@ services:
       - redis
     restart: unless-stopped
 
+  celery:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: payparo_celery
+    command: celery -A config worker --loglevel=info
+    volumes:
+      - .:/app
+    env_file:
+      - .env
+    environment:
+      - DJANGO_SETTINGS_MODULE=config.settings.dev
+      - DATABASE_URL=postgres://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-payparo}
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+      - EMAIL_HOST=smtp.hostinger.com
+      - EMAIL_PORT=587
+      - EMAIL_USE_TLS=True
+      - EMAIL_HOST_USER=no-reply@dailo.app
+      - EMAIL_HOST_PASSWORD=Anaya+Ayan2022
+      - DEFAULT_FROM_EMAIL=no-reply@dailo.app
+    depends_on:
+      - db
+      - redis
+    restart: unless-stopped
+
 volumes:
   postgres_data:

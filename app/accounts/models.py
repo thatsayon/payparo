@@ -47,7 +47,7 @@ class CustomAccountManager(BaseUserManager):
         return self.create_user(email, password, **extra_fields)
 
 
-class UserAccount(AbstractBaseUser, PermissionsMixin):
+class UserAccount(AbstractBaseUser, PermissionsMixin, BaseModel):
 
     groups = models.ManyToManyField(
         'auth.Group',
@@ -68,15 +68,33 @@ class UserAccount(AbstractBaseUser, PermissionsMixin):
         EMAIL = "email", "Email"
         GOOGLE = "google", "Google"
 
+    class TwoFactorMethod(models.TextChoices):
+        EMAIL = "email", "Email"
+        SMS = "sms", "SMS"
+        BOTH = "both", "Email + SMS"
+
     email = models.EmailField(
         _("email address"),
         unique=True,
     )
 
     full_name = models.CharField(max_length=80)
+    username = models.CharField(max_length=50, unique=True, blank=True)
 
     profile_pic = CloudinaryField(blank=True, null=True)
     profile_updated_at = models.DateTimeField(blank=True, null=True)
+
+    phone_number = models.CharField(max_length=20, blank=True, null=True)
+
+    # 2FA SETTINGS
+    two_factor_enabled = models.BooleanField(default=False)
+
+    two_factor_method = models.CharField(
+        max_length=10,
+        choices=TwoFactorMethod.choices,
+        blank=True,
+        null=True
+    )
 
     auth_provider = models.CharField(
         max_length=20,
@@ -96,7 +114,6 @@ class UserAccount(AbstractBaseUser, PermissionsMixin):
     is_banned = models.BooleanField(default=False)
 
     date_joined = models.DateTimeField(default=timezone.now)
-    updated_at = models.DateTimeField(auto_now=True)
 
     USERNAME_FIELD = "email"
     REQUIRED_FIELDS = []
@@ -105,6 +122,7 @@ class UserAccount(AbstractBaseUser, PermissionsMixin):
 
     class Meta:
         indexes = [
+            models.Index(fields=["username"]),
             models.Index(fields=["provider_uid"]),
             models.Index(fields=["date_joined"]),
         ]
@@ -121,7 +139,34 @@ class UserAccount(AbstractBaseUser, PermissionsMixin):
     def save(self, *args, **kwargs):
         if self.email:
             self.email = self.email.lower().strip()
+            
+        # Automatically generate a unique username if none exists
+        if not self.username and self.email:
+            base_username = self.email.split("@")[0]
+            # Strip invalid chars / keep it reasonable length
+            base_username = "".join(c for c in base_username if c.isalnum() or c in "._-")[:40]
+            if not base_username:
+                base_username = "user"
+
+            username = base_username
+            counter = 1
+            # Check uniqueness against other users (excluding self if updating)
+            while UserAccount.objects.filter(username=username).exclude(id=self.id).exists():
+                suffix = str(counter)
+                # Ensure the combined length doesn't exceed max_length (50)
+                username = f"{base_username[:50 - len(suffix)]}{suffix}"
+                counter += 1
+            
+            self.username = username
+
         super().save(*args, **kwargs)
+
+    @property
+    def kyc_status(self):
+        latest_submission = self.kyc_submissions.order_by('-submitted_at').first()
+        if latest_submission:
+            return latest_submission.status
+        return "not_submitted"
 
     def __str__(self):
         return self.email

@@ -18,6 +18,8 @@ from .serializers import (
     IDCardUploadSerializer,
     KYCIdentitySerializer,
     FaceImageUploadSerializer,
+    VerifyLogin2FASerializer,
+    Toggle2FASerializer,
 )
 from .utils import generate_otp, hash_otp, create_otp_token, decode_otp_token
 from .tokens import get_tokens_for_user
@@ -319,6 +321,25 @@ class LoginView(APIView):
                 status=status.HTTP_403_FORBIDDEN,
             )
 
+        if user.two_factor_enabled:
+            # Generate 2FA token and OTP
+            from .tasks import send_confirmation_email_task
+            send_task = send_confirmation_email_task
+            if user.two_factor_method == "sms":
+                # Fallback to email for now as SMS isn't implemented
+                send_task = send_confirmation_email_task
+
+            token = _create_and_send_otp(user, send_task, purpose="2fa_login")
+            return Response(
+                {
+                    "requires_2fa": True,
+                    "method": user.two_factor_method or "email",
+                    "two_factor_token": token,
+                    "message": "Please enter the OTP sent to your registered communication method."
+                },
+                status=status.HTTP_200_OK,
+            )
+
         tokens = get_tokens_for_user(user)
 
         return Response(
@@ -326,11 +347,61 @@ class LoginView(APIView):
                 "success": True,
                 "access": tokens["access"],
                 "refresh": tokens["refresh"],
-                "user": {
-                    "id": str(user.id),
-                    "email": user.email,
-                    "full_name": user.full_name,
-                },
+                "kyc_status": user.kyc_status,
+            },
+            status=status.HTTP_200_OK,
+        )
+
+
+class VerifyLogin2FAView(APIView):
+    """
+    Verify the 2FA login OTP and return JWT tokens.
+    """
+    permission_classes = [permissions.AllowAny]
+
+    def post(self, request):
+        serializer = VerifyLogin2FASerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(
+                {"error": _first_error(serializer)},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        token = serializer.validated_data["two_factor_token"]
+        otp = serializer.validated_data["otp"]
+
+        decoded = decode_otp_token(token)
+        if not decoded or decoded.get("purpose") != "2fa_login":
+            return Response(
+                {"error": "Invalid or expired 2FA token."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            user = User.objects.get(id=decoded["user_id"])
+        except User.DoesNotExist:
+            return Response(
+                {"error": "User not found."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        if not _verify_otp_for_user(user, otp):
+            return Response(
+                {"error": "Invalid or expired OTP."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Clean remaining OTPs
+        user.otps.all().delete()
+
+        tokens = get_tokens_for_user(user)
+
+        return Response(
+            {
+                "success": True,
+                "access": tokens["access"],
+                "refresh": tokens["refresh"],
+                "kyc_status": user.kyc_status,
             },
             status=status.HTTP_200_OK,
         )
@@ -552,6 +623,53 @@ class RefreshAccessTokenView(APIView):
 # ──────────────────────────────────────────────
 # Account Management (Authenticated)
 # ──────────────────────────────────────────────
+
+class Toggle2FAView(APIView):
+    """
+    Authenticated user can turn 2FA on/off and choose the method (email/sms/both).
+    """
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request):
+        serializer = Toggle2FASerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(
+                {"error": _first_error(serializer)},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        enable = serializer.validated_data["enable"]
+        method = serializer.validated_data.get("method")
+
+        user = request.user
+        user.two_factor_enabled = enable
+        
+        if enable:
+            if not method:
+                return Response(
+                    {"error": "A 2FA method (email/sms/both) is required when enabling 2FA."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            
+            if method in ["sms", "both"] and not user.phone_number:
+                return Response(
+                    {"error": "Phone number is required for SMS 2FA."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            
+            user.two_factor_method = method
+
+        user.save(update_fields=["two_factor_enabled", "two_factor_method"])
+
+        return Response(
+            {
+                "success": True,
+                "message": f"2FA has been {'enabled' if enable else 'disabled'}.",
+                "two_factor_enabled": user.two_factor_enabled,
+                "two_factor_method": user.two_factor_method
+            },
+            status=status.HTTP_200_OK,
+        )
 
 class UpdatePasswordView(APIView):
     """Change password for the authenticated user."""

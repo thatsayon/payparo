@@ -47,3 +47,14 @@ def send_password_reset_email_task(self, email: str, full_name: str, otp: str):
         )
     except Exception as exc:
         raise self.retry(exc=exc)
+
+
+@shared_task
+def send_login_otp_task(email, name, otp):
+    send_mail(
+        subject="Login Verification Code",
+        message=f"Hello {name}, your login verification OTP is: {otp}",
+        from_email="noreply@example.com",
+        recipient_list=[email],
+    )
+

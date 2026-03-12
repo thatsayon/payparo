@@ -6,6 +6,7 @@ from .views import (
     VerifyOTPView,
     ResendRegistrationOTPView,
     LoginView,
+    VerifyLogin2FAView,
     LogoutView,
     ForgetPasswordView,
     ForgetPasswordOTPVerifyView,
@@ -13,6 +14,7 @@ from .views import (
     ResendForgetPasswordOTPView,
     RefreshAccessTokenView,
     UpdatePasswordView,
+    Toggle2FAView,
     DeleteAccountView,
     KYCUploadIDCardView,
     KYCPublishView,
@@ -28,6 +30,7 @@ urlpatterns = [
 
     # Login / Logout
     path("login/", LoginView.as_view(), name="login"),
+    path("login/2fa/verify/", VerifyLogin2FAView.as_view(), name="verify-login-2fa"),
     path("logout/", LogoutView.as_view(), name="logout"),
 
     # Forgot password
@@ -41,6 +44,7 @@ urlpatterns = [
 
     # Account management
     path("update-password/", UpdatePasswordView.as_view(), name="update-password"),
+    path("settings/2fa/toggle/", Toggle2FAView.as_view(), name="toggle-2fa"),
     path("delete-account/", DeleteAccountView.as_view(), name="delete-account"),
 
     # KYC

@@ -15,6 +15,10 @@ class Escrow(BaseModel):
         PRODUCT = "product", "Product"
         SERVICE = "service", "Service"
 
+    class PaymentOption(models.TextChoices):
+        SINGLE      = "single",      "Single Payment"
+        INSTALLMENT = "installment", "Custom Installments"
+
     class Status(models.TextChoices):
         PENDING   = "pending",   "Pending"
         ACTIVE    = "active",    "Active"
@@ -29,7 +33,7 @@ class Escrow(BaseModel):
         related_name="created_escrows",
     )
 
-    # The other party (seller or buyer on the other side)
+    # The other party (receiver)
     receiver = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,
@@ -38,7 +42,7 @@ class Escrow(BaseModel):
         related_name="received_escrows",
     )
 
-    # The role the creator is taking in this escrow
+    # Role the creator takes
     role = models.CharField(
         max_length=10,
         choices=Role.choices,
@@ -52,9 +56,18 @@ class Escrow(BaseModel):
     )
 
     product_name = models.CharField(max_length=255)
-    description  = models.TextField(blank=True)
+    description  = models.TextField()
 
-    price    = models.DecimalField(max_digits=12, decimal_places=2)
+    payment_option = models.CharField(
+        max_length=15,
+        choices=PaymentOption.choices,
+        default=PaymentOption.SINGLE,
+    )
+
+    # Used when payment_option == SINGLE; null for installment plans
+    price    = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
+    fee_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0.00)
+    total_amount = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
     currency = models.CharField(max_length=10, default="USD")
 
     status = models.CharField(
@@ -75,15 +88,35 @@ class Escrow(BaseModel):
         return f"Escrow #{self.id} — {self.product_name} ({self.status})"
 
 
-class EscrowImage(models.Model):
-    """One Cloudinary image attached to an Escrow (multiple allowed)."""
+class EscrowInstallment(models.Model):
+    """
+    A single installment amount for a Custom Installments escrow.
+    Ordered by 'order' field (1-based).
+    """
+    escrow = models.ForeignKey(
+        Escrow,
+        on_delete=models.CASCADE,
+        related_name="installments",
+    )
+    amount = models.DecimalField(max_digits=12, decimal_places=2)
+    order  = models.PositiveSmallIntegerField(default=1)
+
+    class Meta:
+        ordering = ["order"]
+
+    def __str__(self):
+        return f"Installment #{self.order} — {self.amount} for Escrow {self.escrow_id}"
+
+
+class EscrowImage(BaseModel):
+    """Product images for an Escrow (multiple allowed, minimum 3 required at creation)."""
 
     escrow = models.ForeignKey(
         Escrow,
         on_delete=models.CASCADE,
         related_name="images",
     )
-    image      = CloudinaryField()
+    image       = CloudinaryField()
     uploaded_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -91,3 +124,23 @@ class EscrowImage(models.Model):
 
     def __str__(self):
         return f"Image for Escrow {self.escrow_id}"
+
+
+class EscrowDocument(BaseModel):
+    """
+    Optional supporting documents for an Escrow.
+    Accepted formats: PDF, DOC, DOCX, JPG, PNG — stored in Cloudinary.
+    """
+    escrow = models.ForeignKey(
+        Escrow,
+        on_delete=models.CASCADE,
+        related_name="documents",
+    )
+    file        = CloudinaryField(resource_type="auto")
+    uploaded_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["uploaded_at"]
+
+    def __str__(self):
+        return f"Document for Escrow {self.escrow_id}"

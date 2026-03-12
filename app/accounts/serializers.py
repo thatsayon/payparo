@@ -42,6 +42,16 @@ class UpdatePasswordSerializer(serializers.Serializer):
     new_password = serializers.CharField(min_length=4)
 
 
+class VerifyLogin2FASerializer(serializers.Serializer):
+    two_factor_token = serializers.CharField()
+    otp = serializers.CharField(max_length=6)
+
+
+class Toggle2FASerializer(serializers.Serializer):
+    enable = serializers.BooleanField()
+    method = serializers.ChoiceField(choices=User.TwoFactorMethod.choices, required=False)
+
+
 class IDCardUploadSerializer(serializers.Serializer):
     id_front = serializers.ImageField(required=True)
     id_back = serializers.ImageField(required=True)
