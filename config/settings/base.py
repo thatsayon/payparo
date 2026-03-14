@@ -50,6 +50,7 @@ INSTALLED_APPS += [
     'app.common',
     'app.excrow',
     'app.administration',
+    'app.profile',
 ]
 
 MIDDLEWARE = [
@@ -208,3 +209,9 @@ CELERY_RESULT_SERIALIZER = 'json'
 CELERY_TIMEZONE = 'UTC'
 CELERY_TASK_TRACK_STARTED = True
 CELERY_TASK_TIME_LIMIT = 30 * 60
+
+# STRIPE CONFIGURATION
+STRIPE_PUBLISHABLE_KEY = env("STRIPE_PUBLISHABLE_KEY", default="")
+STRIPE_SECRET_KEY = env("STRIPE_SECRET_KEY", default="")
+STRIPE_WEBHOOK_SECRET = env("STRIPE_WEBHOOK_SECRET", default="")
+STRIPE_FEE_PERCENT = 3  # 3% processing fee passed to users

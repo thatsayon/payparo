@@ -78,6 +78,13 @@ class EscrowListCreateView(APIView):
         }, status=status.HTTP_200_OK)
 
     def post(self, request):
+        # KYC gate — only users with approved KYC can create escrows
+        if request.user.kyc_status != "approved":
+            return Response(
+                {"error": "Your KYC must be verified before creating an escrow."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
         if hasattr(request.data, "copy"):
             data = request.data.copy()
         else:
@@ -124,11 +131,19 @@ class EscrowListCreateView(APIView):
                 data["documents"] = documents
 
         installments = extract_list("installments", request.data)
+        if installments and len(installments) == 1 and isinstance(installments[0], str) and installments[0].startswith('['):
+            # Try to parse stringified JSON array which is common in Postman
+            import json
+            try:
+                installments = json.loads(installments[0])
+            except ValueError:
+                pass
+                
         if installments:
             if hasattr(data, "setlist"):
-                data.setlist("installments", installments)
+                data.setlist("installments", [str(i) for i in installments])
             else:
-                data["installments"] = installments
+                data["installments"] = [str(i) for i in installments]
 
         serializer = EscrowCreateSerializer(
             data=data,

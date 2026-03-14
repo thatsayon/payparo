@@ -17,7 +17,7 @@ MIN_IMAGES = 3
 class EscrowInstallmentSerializer(serializers.ModelSerializer):
     class Meta:
         model  = EscrowInstallment
-        fields = ["id", "order", "amount"]
+        fields = ["id", "order", "amount", "is_paid", "paid_at"]
 
 
 class EscrowImageSerializer(serializers.ModelSerializer):
@@ -134,15 +134,23 @@ class EscrowCreateSerializer(serializers.Serializer):
         # Payment option cross-validation
         payment_option = data.get("payment_option")
 
+        has_price = bool(data.get("price"))
+        has_installments = bool(data.get("installments"))
+
+        if has_price and has_installments:
+            raise serializers.ValidationError(
+                "You cannot provide both a price and installments. Please provide only one."
+            )
+
         if payment_option == Escrow.PaymentOption.SINGLE:
-            if not data.get("price"):
+            if not has_price:
                 raise serializers.ValidationError(
                     {"price": "Price is required for Single Payment."}
                 )
             data.pop("installments", None)
 
         elif payment_option == Escrow.PaymentOption.INSTALLMENT:
-            if not data.get("installments"):
+            if not has_installments:
                 raise serializers.ValidationError(
                     {"installments": "At least one installment amount is required for Custom Installments."}
                 )

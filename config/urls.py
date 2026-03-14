@@ -18,6 +18,9 @@ urlpatterns = [
     # Escrow
     path('api/escrow/', include('app.excrow.urls')),
 
+    # Profile & Wallet
+    path('api/profile/', include('app.profile.urls')),
+
     # API Documentation
     path('api/schema/', SpectacularAPIView.as_view(), name='schema'),
     path('api/docs/', SpectacularSwaggerView.as_view(url_name='schema'), name='swagger-ui'),

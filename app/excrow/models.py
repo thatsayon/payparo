@@ -154,11 +154,17 @@ class EscrowInstallment(models.Model):
     amount = models.DecimalField(max_digits=12, decimal_places=2)
     order  = models.PositiveSmallIntegerField(default=1)
 
+    # Payment Tracking
+    is_paid = models.BooleanField(default=False, db_index=True)
+    paid_at = models.DateTimeField(null=True, blank=True)
+    payment_intent_id = models.CharField(max_length=255, blank=True, null=True)
+
     class Meta:
         ordering = ["order"]
 
     def __str__(self):
-        return f"Installment #{self.order} — {self.amount} for Escrow {self.escrow_id}"
+        status = "Paid" if self.is_paid else "Unpaid"
+        return f"Installment #{self.order} — {self.amount} for Escrow {self.escrow_id} ({status})"
 
 
 class EscrowImage(BaseModel):
