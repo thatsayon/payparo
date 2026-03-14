@@ -1,8 +1,15 @@
 from django.db import models
 from django.conf import settings
+import string
+import random
 
 from cloudinary.models import CloudinaryField
 from app.common.models import BaseModel
+
+def generate_order_id():
+    """Generates a random 11-character alphanumeric string like '152JkRLPR03'."""
+    characters = string.ascii_letters + string.digits
+    return "".join(random.choices(characters, k=11))
 
 
 class Escrow(BaseModel):
@@ -20,11 +27,20 @@ class Escrow(BaseModel):
         INSTALLMENT = "installment", "Custom Installments"
 
     class Status(models.TextChoices):
-        PENDING   = "pending",   "Pending"
-        ACTIVE    = "active",    "Active"
-        COMPLETED = "completed", "Completed"
-        DISPUTED  = "disputed",  "Disputed"
-        CANCELLED = "cancelled", "Cancelled"
+        CREATED            = "created",            "Created"
+        FUNDED             = "funded",             "Funded"
+        ACCEPTED           = "accepted",           "Accepted"
+        IN_PROGRESS        = "in_progress",        "In Progress"
+        SHIPPED            = "shipped",            "Shipped"
+        DELIVERED          = "delivered",          "Delivered"
+        UNDER_REVIEW       = "under_review",       "Under Review"
+        ISSUE_RAISED       = "issue_raised",       "Issue Raised"
+        RETURN_IN_PROGRESS = "return_in_progress", "Return In Progress"
+        RESOLVED           = "resolved",           "Resolved"
+        REFUNDED           = "refunded",           "Refunded"
+        PAYMENT_RELEASED   = "payment_released",   "Payment Released"
+        COMPLETED          = "completed",          "Completed"
+        CANCELLED          = "cancelled",          "Cancelled"
 
     # The user who creates this escrow
     created_by = models.ForeignKey(
@@ -40,6 +56,15 @@ class Escrow(BaseModel):
         null=True,
         blank=True,
         related_name="received_escrows",
+    )
+
+    # Unique identifier for the order
+    order_id = models.CharField(
+        max_length=20,
+        unique=True,
+        editable=False,
+        default=generate_order_id,
+        db_index=True,
     )
 
     # Role the creator takes
@@ -71,9 +96,9 @@ class Escrow(BaseModel):
     currency = models.CharField(max_length=10, default="USD")
 
     status = models.CharField(
-        max_length=15,
+        max_length=20,
         choices=Status.choices,
-        default=Status.PENDING,
+        default=Status.CREATED,
         db_index=True,
     )
 
@@ -84,8 +109,36 @@ class Escrow(BaseModel):
             models.Index(fields=["receiver", "status"]),
         ]
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._original_status = self.status
+
     def __str__(self):
         return f"Escrow #{self.id} — {self.product_name} ({self.status})"
+
+    def save(self, *args, **kwargs):
+        is_new = self._state.adding
+        status_changed = not is_new and self.status != self._original_status
+
+        super().save(*args, **kwargs)
+
+        # Log status history if new or status changed
+        if is_new or status_changed:
+            EscrowStatusHistory.objects.create(escrow=self, status=self.status)
+        self._original_status = self.status
+
+
+class EscrowStatusHistory(models.Model):
+    """Tracks the timeline of an Escrow's status changes."""
+    escrow = models.ForeignKey(Escrow, on_delete=models.CASCADE, related_name="status_history")
+    status = models.CharField(max_length=20, choices=Escrow.Status.choices)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["created_at"]
+
+    def __str__(self):
+        return f"Escrow {self.escrow.id} changed to {self.status} at {self.created_at}"
 
 
 class EscrowInstallment(models.Model):

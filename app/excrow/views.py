@@ -12,6 +12,8 @@ from .serializers import (
     EscrowListSerializer,
     EscrowDetailSerializer,
     ReceiverSerializer,
+    OrderHistorySerializer,
+    OrderHistoryDetailSerializer,
 )
 
 User = get_user_model()
@@ -215,3 +217,54 @@ class UserSearchView(APIView):
 
         serializer = ReceiverSerializer(users, many=True)
         return Response({"success": True, "results": serializer.data}, status=status.HTTP_200_OK)
+
+
+class OrderHistory(generics.ListAPIView):
+    permission_classes = [permissions.IsAuthenticated]
+    serializer_class = OrderHistorySerializer
+    queryset = Escrow.objects.all()
+
+
+class OrderHistoryDetailView(APIView):
+    """
+    GET — Retrieve a simplified order history detail (timeline) for a single escrow.
+    """
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request, pk):
+        try:
+            escrow = Escrow.objects.select_related("created_by", "receiver").prefetch_related("images", "status_history").get(pk=pk)
+        except Escrow.DoesNotExist:
+            return Response({"error": "Escrow not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        if escrow.created_by != request.user and escrow.receiver != request.user:
+            return Response({"error": "You do not have access to this escrow."}, status=status.HTTP_403_FORBIDDEN)
+
+        serializer = OrderHistoryDetailSerializer(escrow, context={"request": request})
+        return Response({"success": True, "detail": serializer.data}, status=status.HTTP_200_OK)
+
+
+class EscrowAcceptView(APIView):
+    """
+    POST — Receiver accepts the Escrow request.
+    """
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request, pk):
+        try:
+            escrow = Escrow.objects.get(pk=pk)
+        except Escrow.DoesNotExist:
+            return Response({"error": "Escrow not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        if escrow.receiver != request.user:
+            return Response({"error": "Only the receiver can accept this Escrow."}, status=status.HTTP_403_FORBIDDEN)
+
+        # Ensure it's in a state that can be accepted
+        if escrow.status not in [Escrow.Status.CREATED, Escrow.Status.FUNDED]:
+            return Response({"error": f"Escrow cannot be accepted from {escrow.get_status_display()} state."}, status=status.HTTP_400_BAD_REQUEST)
+
+        escrow.status = Escrow.Status.ACCEPTED
+        escrow.save()
+
+        return Response({"success": True, "message": "Escrow accepted successfully."}, status=status.HTTP_200_OK)
+

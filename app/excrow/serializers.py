@@ -2,7 +2,7 @@ from rest_framework import serializers
 from django.contrib.auth import get_user_model
 from django.db import transaction
 
-from .models import Escrow, EscrowInstallment, EscrowImage, EscrowDocument
+from .models import Escrow, EscrowInstallment, EscrowImage, EscrowDocument, EscrowStatusHistory
 from app.administration.models import FeeConfiguration
 
 User = get_user_model()
@@ -40,6 +40,12 @@ class EscrowDocumentSerializer(serializers.ModelSerializer):
 
     def get_url(self, obj):
         return obj.file.url if obj.file else None
+
+
+class EscrowStatusHistorySerializer(serializers.ModelSerializer):
+    class Meta:
+        model = EscrowStatusHistory
+        fields = ["id", "status", "created_at"]
 
 
 class ReceiverSerializer(serializers.ModelSerializer):
@@ -220,7 +226,7 @@ class EscrowListSerializer(serializers.ModelSerializer):
     class Meta:
         model  = Escrow
         fields = [
-            "id", "product_name", "role", "item_type",
+            "id", "order_id", "product_name", "role", "item_type",
             "payment_option", "price", "fee_amount", "total_amount", "currency", "status",
             "created_by", "receiver", "cover_image", "created_at",
         ]
@@ -237,13 +243,42 @@ class EscrowDetailSerializer(serializers.ModelSerializer):
     images       = EscrowImageSerializer(many=True, read_only=True)
     documents    = EscrowDocumentSerializer(many=True, read_only=True)
     installments = EscrowInstallmentSerializer(many=True, read_only=True)
+    status_history = EscrowStatusHistorySerializer(many=True, read_only=True)
 
     class Meta:
         model  = Escrow
         fields = [
-            "id", "product_name", "role", "item_type",
+            "id", "order_id", "product_name", "role", "item_type",
             "payment_option", "price", "fee_amount", "total_amount", "currency", "status",
             "description", "created_by", "receiver",
-            "images", "documents", "installments",
+            "images", "documents", "installments", "status_history",
             "created_at", "updated_at",
         ]
+
+
+class OrderHistorySerializer(serializers.ModelSerializer):
+
+    class Meta:
+        model = Escrow
+        fields = [
+            "id", "order_id", "product_name", "status", "created_at"
+        ]
+
+
+class OrderHistoryDetailSerializer(serializers.ModelSerializer):
+    created_by = ReceiverSerializer(read_only=True)
+    receiver   = ReceiverSerializer(read_only=True)
+    cover_image = serializers.SerializerMethodField()
+    status_history = EscrowStatusHistorySerializer(many=True, read_only=True)
+
+    class Meta:
+        model = Escrow
+        fields = [
+            "id", "order_id", "product_name", "price", 
+            "created_by", "receiver", "cover_image", 
+            "status", "status_history", "created_at"
+        ]
+
+    def get_cover_image(self, obj):
+        first = obj.images.first()
+        return first.image.url if first else None
