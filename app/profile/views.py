@@ -56,6 +56,38 @@ class WalletBalanceView(APIView):
 
 
 # ──────────────────────────────────────────────
+# Stripe Fee Config
+# ──────────────────────────────────────────────
+
+class StripeFeeConfigView(APIView):
+    """
+    GET — Return the current Stripe fee percentage and fixed amount
+    configured by the admin.
+    """
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        from app.administration.models import FeeConfiguration
+
+        config = FeeConfiguration.objects.first()
+        if config:
+            fee_percent = str(config.stripe_fee_percentage)
+            fixed_fee = str(config.stripe_fixed_fee)
+        else:
+            fee_percent = str(getattr(settings, "STRIPE_FEE_PERCENT", "3.00"))
+            fixed_fee = "0.00"
+
+        return Response(
+            {
+                "success": True,
+                "stripe_fee_percentage": fee_percent,
+                "stripe_fixed_fee": fixed_fee,
+            },
+            status=status.HTTP_200_OK,
+        )
+
+
+# ──────────────────────────────────────────────
 # Add Balance (Create Stripe PaymentIntent)
 # ──────────────────────────────────────────────
 
