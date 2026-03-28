@@ -7,17 +7,26 @@ from django.db import transaction as db_transaction
 from django.views.decorators.csrf import csrf_exempt
 from django.utils.decorators import method_decorator
 
-from rest_framework import permissions, status
+from rest_framework import permissions, status, generics
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.parsers import JSONParser
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from .models import Wallet, WalletTransaction
+from .models import (
+    Wallet, 
+    WalletTransaction,
+    BankAccount,
+    PaypalAccount
+)
+
 from .serializers import (
     AddBalanceSerializer,
     WalletSerializer,
     WalletTransactionSerializer,
+    ProfileHomeSerializer,
+    BankAccountSerializer,
+    PaypalAccountSerializer,
 )
 
 logger = logging.getLogger(__name__)
@@ -315,3 +324,92 @@ class TransactionHistoryView(APIView):
             },
             status=status.HTTP_200_OK,
         )
+
+
+# ──────────────────────────────────────────────
+# Profile Home
+# ──────────────────────────────────────────────
+class ProfileHome(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        serializer = ProfileHomeSerializer(request.user)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+# ──────────────────────────────────────────────
+# Payout Accounts
+# ──────────────────────────────────────────────
+
+from rest_framework import generics, mixins
+from rest_framework.exceptions import NotFound
+from .models import BankAccount, PaypalAccount
+from .serializers import BankAccountSerializer, PaypalAccountSerializer
+
+class BankAccountView(
+    mixins.CreateModelMixin,
+    mixins.RetrieveModelMixin,
+    mixins.UpdateModelMixin,
+    mixins.DestroyModelMixin,
+    generics.GenericAPIView
+):
+    serializer_class = BankAccountSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_object(self):
+        try:
+            return BankAccount.objects.get(user=self.request.user)
+        except BankAccount.DoesNotExist:
+            raise NotFound("Bank account not configured.")
+
+    def get(self, request, *args, **kwargs):
+        return self.retrieve(request, *args, **kwargs)
+
+    def post(self, request, *args, **kwargs):
+        if BankAccount.objects.filter(user=request.user).exists():
+            return Response(
+                {"detail": "Bank account already exists. Use PATCH to update it."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        return self.create(request, *args, **kwargs)
+
+    def patch(self, request, *args, **kwargs):
+        return self.partial_update(request, *args, **kwargs)
+
+    def delete(self, request, *args, **kwargs):
+        return self.destroy(request, *args, **kwargs)
+
+
+class PaypalAccountView(
+    mixins.CreateModelMixin,
+    mixins.RetrieveModelMixin,
+    mixins.UpdateModelMixin,
+    mixins.DestroyModelMixin,
+    generics.GenericAPIView
+):
+    serializer_class = PaypalAccountSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_object(self):
+        try:
+            return PaypalAccount.objects.get(user=self.request.user)
+        except PaypalAccount.DoesNotExist:
+            raise NotFound("PayPal account not configured.")
+
+    def get(self, request, *args, **kwargs):
+        return self.retrieve(request, *args, **kwargs)
+
+    def post(self, request, *args, **kwargs):
+        if PaypalAccount.objects.filter(user=request.user).exists():
+            return Response(
+                {"detail": "PayPal account already exists. Use PATCH to update it."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        return self.create(request, *args, **kwargs)
+
+    def patch(self, request, *args, **kwargs):
+        return self.partial_update(request, *args, **kwargs)
+
+    def delete(self, request, *args, **kwargs):
+        return self.destroy(request, *args, **kwargs)
+

@@ -91,3 +91,43 @@ class WalletTransaction(BaseModel):
             f"{self.get_transaction_type_display()} — "
             f"{self.amount} ({self.get_status_display()})"
         )
+
+
+class BankAccount(BaseModel):
+    user = models.OneToOneField(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="bank_account"
+    )
+    bank_name = models.CharField(max_length=255)
+    account_holder_name = models.CharField(max_length=255)
+    account_number = models.CharField(max_length=50)
+    routing_number = models.CharField(max_length=50)
+
+    class Meta:
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["user"]),
+        ]
+
+    def __str__(self):
+        return f"{self.bank_name} - {self.account_number[-4:]} ({self.user.email})"
+
+
+class PaypalAccount(BaseModel):
+    user = models.OneToOneField(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="paypal_account"
+    )
+    paypal_email = models.EmailField()
+    full_name = models.CharField(max_length=255)
+
+    class Meta:
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["user"]),
+        ]
+
+    def __str__(self):
+        return f"PayPal: {self.paypal_email} ({self.user.email})"

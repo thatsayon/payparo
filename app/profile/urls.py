@@ -6,6 +6,9 @@ from .views import (
     CreatePaymentIntentView,
     StripeWebhookView,
     TransactionHistoryView,
+    ProfileHome,
+    BankAccountView,
+    PaypalAccountView,
 )
 
 urlpatterns = [
@@ -17,4 +20,13 @@ urlpatterns = [
 
     # Stripe webhook (no auth — verified by signature)
     path("wallet/webhook/stripe/", StripeWebhookView.as_view(), name="stripe-webhook"),
+
+    # Profile Home
+    path("home/", ProfileHome.as_view(), name="profile-home"),
+
+    # Bank Accounts (Singleton)
+    path("banks/", BankAccountView.as_view(), name="bank-account"),
+
+    # PayPal Accounts (Singleton)
+    path("paypal/", PaypalAccountView.as_view(), name="paypal-account"),
 ]

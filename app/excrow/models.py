@@ -203,3 +203,35 @@ class EscrowDocument(BaseModel):
 
     def __str__(self):
         return f"Document for Escrow {self.escrow_id}"
+
+
+class Review(BaseModel):
+    """
+    Review and rating given by the buyer to the seller for a specific completed Escrow.
+    """
+    escrow = models.OneToOneField(
+        Escrow,
+        on_delete=models.CASCADE,
+        related_name="review"
+    )
+    reviewer = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="given_reviews"
+    )
+    reviewee = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="received_reviews"
+    )
+    rating = models.PositiveSmallIntegerField(default=5)
+    comment = models.TextField(blank=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["reviewee"]),
+        ]
+
+    def __str__(self):
+        return f"Review for Escrow #{self.escrow_id} - Rating {self.rating}"

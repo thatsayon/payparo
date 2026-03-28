@@ -3,8 +3,13 @@ from decimal import Decimal, ROUND_HALF_UP
 from rest_framework import serializers
 from django.conf import settings
 
-from .models import Wallet, WalletTransaction
+from django.contrib.auth import get_user_model
+from django.db.models import Q, Avg
 
+from app.excrow.models import Escrow
+from .models import Wallet, WalletTransaction, BankAccount, PaypalAccount
+
+User = get_user_model()
 
 class WalletSerializer(serializers.ModelSerializer):
     """Read-only representation of a user's wallet."""
@@ -86,3 +91,66 @@ class WalletTransactionSerializer(serializers.ModelSerializer):
             "created_at",
         )
         read_only_fields = fields
+
+
+class ProfileHomeSerializer(serializers.ModelSerializer):
+    kyc_status = serializers.CharField(read_only=True)
+    total_completed_escrows = serializers.SerializerMethodField()
+    rating = serializers.SerializerMethodField()
+
+    class Meta:
+        model = User
+        fields = (
+            'id',
+            'email',
+            'full_name',
+            'profile_pic',
+            'kyc_status',
+            'total_completed_escrows',
+            'rating'
+        )
+
+    def get_total_completed_escrows(self, obj):
+        return Escrow.objects.filter(
+            Q(created_by=obj) | Q(receiver=obj),
+            status=Escrow.Status.COMPLETED
+        ).count()
+
+    def get_rating(self, obj):
+        avg = obj.received_reviews.aggregate(average=Avg('rating'))['average']
+        return round(avg, 2) if avg else 0.0
+
+
+class BankAccountSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = BankAccount
+        fields = (
+            "id",
+            "bank_name",
+            "account_holder_name",
+            "account_number",
+            "routing_number",
+            "created_at",
+            "updated_at"
+        )
+        read_only_fields = ("id", "created_at", "updated_at")
+
+    def create(self, validated_data):
+        return BankAccount.objects.create(user=self.context["request"].user, **validated_data)
+
+
+class PaypalAccountSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = PaypalAccount
+        fields = (
+            "id",
+            "paypal_email",
+            "full_name",
+            "created_at",
+            "updated_at"
+        )
+        read_only_fields = ("id", "created_at", "updated_at")
+
+    def create(self, validated_data):
+        return PaypalAccount.objects.create(user=self.context["request"].user, **validated_data)
+
