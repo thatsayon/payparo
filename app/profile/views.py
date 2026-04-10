@@ -7,11 +7,12 @@ from django.db import transaction as db_transaction
 from django.views.decorators.csrf import csrf_exempt
 from django.utils.decorators import method_decorator
 
-from rest_framework import permissions, status, generics
+from rest_framework import permissions, status, generics, mixins
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.parsers import JSONParser
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from rest_framework.exceptions import NotFound
 
 from .models import (
     Wallet, 
@@ -27,6 +28,7 @@ from .serializers import (
     ProfileHomeSerializer,
     BankAccountSerializer,
     PaypalAccountSerializer,
+    PhoneNumberSerializer,
 )
 
 logger = logging.getLogger(__name__)
@@ -95,6 +97,34 @@ class StripeFeeConfigView(APIView):
             status=status.HTTP_200_OK,
         )
 
+
+class WithdrawFeeConfigView(APIView):
+    """
+    GET — Return the current withdraw fee and withdraw fee percentage
+    configured by the admin.
+    """
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        from app.administration.models import FeeConfiguration
+
+        config = FeeConfiguration.objects.first()
+
+        if config:
+            withdraw_fee = str(config.withdraw_fee)
+            withdraw_fee_percentage = str(config.withdraw_fee_percentage)
+        else:
+            withdraw_fee = str(getattr(settings, "WITHDRAW_FEE", "0.00"))
+            withdraw_fee_percentage = str(getattr(settings, "WITHDRAW_FEE_PERCENTAGE", "0.00"))
+
+        return Response(
+            {
+                "success": True,
+                "withdraw_fee": withdraw_fee,
+                "withdraw_fee_percentage": withdraw_fee_percentage,
+            },
+            status=status.HTTP_200_OK,
+        )
 
 # ──────────────────────────────────────────────
 # Add Balance (Create Stripe PaymentIntent)
@@ -340,12 +370,6 @@ class ProfileHome(APIView):
 # ──────────────────────────────────────────────
 # Payout Accounts
 # ──────────────────────────────────────────────
-
-from rest_framework import generics, mixins
-from rest_framework.exceptions import NotFound
-from .models import BankAccount, PaypalAccount
-from .serializers import BankAccountSerializer, PaypalAccountSerializer
-
 class BankAccountView(
     mixins.CreateModelMixin,
     mixins.RetrieveModelMixin,
@@ -412,4 +436,18 @@ class PaypalAccountView(
 
     def delete(self, request, *args, **kwargs):
         return self.destroy(request, *args, **kwargs)
+
+
+# ──────────────────────────────────────────────
+# Phone Number
+# ──────────────────────────────────────────────
+class UpdatePhoneNumberView(generics.UpdateAPIView):
+    """
+    PATCH or PUT to update the authenticated user's phone number.
+    """
+    serializer_class = PhoneNumberSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_object(self):
+        return self.request.user
 

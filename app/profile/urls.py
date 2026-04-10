@@ -9,6 +9,8 @@ from .views import (
     ProfileHome,
     BankAccountView,
     PaypalAccountView,
+    UpdatePhoneNumberView,
+    WithdrawFeeConfigView,
 )
 
 urlpatterns = [
@@ -29,4 +31,10 @@ urlpatterns = [
 
     # PayPal Accounts (Singleton)
     path("paypal/", PaypalAccountView.as_view(), name="paypal-account"),
+
+    # Phone Number
+    path("phone/", UpdatePhoneNumberView.as_view(), name="update-phone-number"),
+
+    # Withdraw
+    path("withdraw/fee/", WithdrawFeeConfigView.as_view(), name="withdraw-fee"),
 ]

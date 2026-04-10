@@ -154,3 +154,9 @@ class PaypalAccountSerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         return PaypalAccount.objects.create(user=self.context["request"].user, **validated_data)
 
+
+class PhoneNumberSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = User
+        fields = ("phone_number",)
+
