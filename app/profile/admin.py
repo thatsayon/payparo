@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import Wallet, WalletTransaction
+from .models import Wallet, WalletTransaction, WithdrawTransaction
 
 
 @admin.register(Wallet)
@@ -25,3 +25,5 @@ class WalletTransactionAdmin(admin.ModelAdmin):
     list_filter = ("transaction_type", "status")
     search_fields = ("wallet__user__email", "stripe_payment_intent_id")
     readonly_fields = ("id", "created_at", "updated_at")
+
+admin.site.register(WithdrawTransaction)
