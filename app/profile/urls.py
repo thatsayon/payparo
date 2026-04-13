@@ -2,6 +2,8 @@ from django.urls import path
 
 from .views import (
     WalletBalanceView,
+    WithdrawPageView,
+    WithdrawRequestView,
     StripeFeeConfigView,
     CreatePaymentIntentView,
     StripeWebhookView,
@@ -19,6 +21,8 @@ from .views import (
 urlpatterns = [
     # Wallet
     path("wallet/balance/", WalletBalanceView.as_view(), name="wallet-balance"),
+    path("wallet/withdraw-page/", WithdrawPageView.as_view(), name="wallet-withdraw-page"),
+    path("wallet/withdraw-request/", WithdrawRequestView.as_view(), name="wallet-withdraw-request"),
     path("wallet/stripe-fee/", StripeFeeConfigView.as_view(), name="stripe-fee-config"),
     path("wallet/add-balance/", CreatePaymentIntentView.as_view(), name="wallet-add-balance"),
     path("wallet/transactions/", TransactionHistoryView.as_view(), name="wallet-transactions"),

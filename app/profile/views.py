@@ -71,6 +71,195 @@ class WalletBalanceView(APIView):
 
 
 # ──────────────────────────────────────────────
+# Withdraw Page (balance + payout accounts)
+# ──────────────────────────────────────────────
+
+class WithdrawPageView(APIView):
+    """
+    GET — Return the authenticated user's wallet balance, withdraw fee info
+    from FeeConfiguration, and any configured payout accounts.
+    Fields (bank_account / paypal_account) are omitted when not configured.
+    """
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        from app.administration.models import FeeConfiguration
+        from decimal import Decimal as D
+
+        user = request.user
+        wallet = _get_or_create_wallet(user)
+
+        config = FeeConfiguration.objects.first()
+        if config:
+            processing_fee        = str(config.withdraw_fee)
+            processing_fee_pct    = str(config.withdraw_fee_percentage)
+            min_withdraw_amount   = str(config.withdraw_min_amount)
+        else:
+            processing_fee        = str(getattr(settings, "WITHDRAW_FEE", "0.00"))
+            processing_fee_pct    = str(getattr(settings, "WITHDRAW_FEE_PERCENTAGE", "0.00"))
+            min_withdraw_amount   = "10.00"
+
+        data = {
+            "success": True,
+            "wallet": WalletSerializer(wallet).data,
+            "processing_fee": processing_fee,
+            "processing_fee_percentage": processing_fee_pct,
+            "min_withdraw_amount": min_withdraw_amount,
+        }
+
+        try:
+            bank_account = BankAccount.objects.get(user=user)
+            data["bank_account"] = BankAccountSerializer(bank_account).data
+        except BankAccount.DoesNotExist:
+            pass
+
+        try:
+            paypal_account = PaypalAccount.objects.get(user=user)
+            data["paypal_account"] = PaypalAccountSerializer(paypal_account).data
+        except PaypalAccount.DoesNotExist:
+            pass
+
+        return Response(data, status=status.HTTP_200_OK)
+
+
+# ──────────────────────────────────────────────
+# Withdraw Request
+# ──────────────────────────────────────────────
+
+class WithdrawRequestView(APIView):
+    """
+    POST — Submit a withdrawal request.
+
+    Body:
+        amount  (Decimal)  — amount the user wants to withdraw
+        method  (str)      — "bank" or "paypal"
+
+    Validations:
+        1. amount >= min_withdraw_amount
+        2. The chosen payout account must exist
+        3. Wallet balance >= amount
+
+    On success:
+        - Deducts `amount` from wallet balance atomically
+        - Creates WithdrawTransaction(status=PENDING) for admin approval
+    """
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request):
+        from app.administration.models import FeeConfiguration
+        from decimal import Decimal as D, ROUND_HALF_UP
+        import uuid
+
+        user   = request.user
+        amount = request.data.get("amount")
+        method = request.data.get("method", "").lower()
+
+        # ── basic input validation ──────────────────────────────
+        if not amount:
+            return Response({"error": "amount is required."}, status=status.HTTP_400_BAD_REQUEST)
+        if method not in ("bank", "paypal"):
+            return Response({"error": "method must be 'bank' or 'paypal'."}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            amount = D(str(amount)).quantize(D("0.01"), rounding=ROUND_HALF_UP)
+        except Exception:
+            return Response({"error": "Invalid amount."}, status=status.HTTP_400_BAD_REQUEST)
+
+        if amount <= 0:
+            return Response({"error": "Amount must be greater than zero."}, status=status.HTTP_400_BAD_REQUEST)
+
+        # ── fee config ─────────────────────────────────────────
+        config = FeeConfiguration.objects.first()
+        if config:
+            fixed_fee   = D(str(config.withdraw_fee))
+            fee_pct     = D(str(config.withdraw_fee_percentage))
+            min_amount  = D(str(config.withdraw_min_amount))
+        else:
+            fixed_fee   = D(str(getattr(settings, "WITHDRAW_FEE", "0.00")))
+            fee_pct     = D(str(getattr(settings, "WITHDRAW_FEE_PERCENTAGE", "0.00")))
+            min_amount  = D("10.00")
+
+        # ── 1. minimum amount check ─────────────────────────────
+        if amount < min_amount:
+            return Response(
+                {"error": f"Minimum withdrawal amount is ${min_amount}."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # ── 2. payout account existence ─────────────────────────
+        bank_obj   = None
+        paypal_obj = None
+
+        if method == "bank":
+            try:
+                bank_obj = BankAccount.objects.get(user=user)
+            except BankAccount.DoesNotExist:
+                return Response(
+                    {"error": "No bank account configured. Please add one first."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+        else:
+            try:
+                paypal_obj = PaypalAccount.objects.get(user=user)
+            except PaypalAccount.DoesNotExist:
+                return Response(
+                    {"error": "No PayPal account configured. Please add one first."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+        # ── 3. balance check + atomic deduction ─────────────────
+        fee        = (fixed_fee + (amount * fee_pct / D("100"))).quantize(D("0.01"), rounding=ROUND_HALF_UP)
+        net_amount = (amount - fee).quantize(D("0.01"), rounding=ROUND_HALF_UP)
+
+        with db_transaction.atomic():
+            wallet = Wallet.objects.select_for_update().get(user=user)
+
+            if wallet.balance < amount:
+                return Response(
+                    {"error": "Insufficient wallet balance."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            wallet.balance -= amount
+            wallet.save(update_fields=["balance", "updated_at"])
+
+            txn = WithdrawTransaction.objects.create(
+                user=user,
+                method=method,
+                amount=amount,
+                fee=fee,
+                net_amount=net_amount,
+                status=WithdrawTransaction.Status.PENDING,
+                transaction_ref=uuid.uuid4().hex[:20].upper(),
+                description=f"Withdrawal via {method.capitalize()}",
+                # bank-specific
+                bank_name=bank_obj.bank_name if bank_obj else None,
+                account_number_last4=bank_obj.account_number[-4:] if bank_obj else None,
+                # paypal-specific
+                paypal_email=paypal_obj.paypal_email if paypal_obj else None,
+            )
+
+        return Response(
+            {
+                "success": True,
+                "message": "Withdrawal request submitted and is pending admin approval.",
+                "transaction": {
+                    "id": str(txn.id),
+                    "method": txn.method,
+                    "amount": str(txn.amount),
+                    "fee": str(txn.fee),
+                    "net_amount": str(txn.net_amount),
+                    "status": txn.status,
+                    "transaction_ref": txn.transaction_ref,
+                    "created_at": txn.created_at,
+                },
+            },
+            status=status.HTTP_201_CREATED,
+        )
+
+
+
+# ──────────────────────────────────────────────
 # Stripe Fee Config
 # ──────────────────────────────────────────────
 
