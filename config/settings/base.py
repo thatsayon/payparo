@@ -51,6 +51,7 @@ INSTALLED_APPS += [
     'app.excrow',
     'app.administration',
     'app.profile',
+    'app.refer',
 ]
 
 MIDDLEWARE = [
