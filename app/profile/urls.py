@@ -11,6 +11,9 @@ from .views import (
     PaypalAccountView,
     UpdatePhoneNumberView,
     WithdrawFeeConfigView,
+    UpdateProfileView,
+    PaypalWithdrawHistoryView,
+    BankWithdrawHistoryView,
 )
 
 urlpatterns = [
@@ -37,4 +40,11 @@ urlpatterns = [
 
     # Withdraw
     path("withdraw/fee/", WithdrawFeeConfigView.as_view(), name="withdraw-fee"),
+
+    # Update Profile
+    path("update/", UpdateProfileView.as_view(), name="update-profile"),
+
+    # Withdraw History
+    path("withdraw/history/paypal/", PaypalWithdrawHistoryView.as_view(), name="paypal-withdraw-history"),
+    path("withdraw/history/bank/", BankWithdrawHistoryView.as_view(), name="bank-withdraw-history"),
 ]

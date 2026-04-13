@@ -131,3 +131,58 @@ class PaypalAccount(BaseModel):
 
     def __str__(self):
         return f"PayPal: {self.paypal_email} ({self.user.email})"
+
+
+class WithdrawTransaction(BaseModel):
+    """
+    Logs every user-initiated withdrawal (bank or paypal).
+    """
+
+    class Method(models.TextChoices):
+        BANK = "bank", "Bank"
+        PAYPAL = "paypal", "PayPal"
+
+    class Status(models.TextChoices):
+        PENDING = "pending", "Pending"
+        COMPLETED = "completed", "Completed"
+        FAILED = "failed", "Failed"
+
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="withdraw_transactions",
+    )
+
+    method = models.CharField(max_length=10, choices=Method.choices)
+
+    amount = models.DecimalField(max_digits=14, decimal_places=2)
+    fee = models.DecimalField(max_digits=14, decimal_places=2, default=0.00)
+    net_amount = models.DecimalField(max_digits=14, decimal_places=2, default=0.00)
+
+    # PayPal-specific (nullable for bank withdrawals)
+    paypal_email = models.EmailField(blank=True, null=True)
+
+    # Bank-specific (nullable for paypal withdrawals)
+    bank_name = models.CharField(max_length=255, blank=True, null=True)
+    account_number_last4 = models.CharField(max_length=4, blank=True, null=True)
+
+    transaction_ref = models.CharField(max_length=100, blank=True, db_index=True)
+
+    status = models.CharField(
+        max_length=15,
+        choices=Status.choices,
+        default=Status.PENDING,
+        db_index=True,
+    )
+
+    description = models.CharField(max_length=255, blank=True, default="")
+
+    class Meta:
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["user", "method"]),
+            models.Index(fields=["status"]),
+        ]
+
+    def __str__(self):
+        return f"{self.get_method_display()} withdraw — {self.amount} ({self.get_status_display()})"

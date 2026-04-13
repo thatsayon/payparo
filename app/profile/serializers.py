@@ -7,7 +7,7 @@ from django.contrib.auth import get_user_model
 from django.db.models import Q, Avg
 
 from app.excrow.models import Escrow
-from .models import Wallet, WalletTransaction, BankAccount, PaypalAccount
+from .models import Wallet, WalletTransaction, BankAccount, PaypalAccount, WithdrawTransaction
 
 User = get_user_model()
 
@@ -160,3 +160,77 @@ class PhoneNumberSerializer(serializers.ModelSerializer):
         model = User
         fields = ("phone_number",)
 
+class ProfileUpdateSerializer(serializers.ModelSerializer):
+    profile_pic = serializers.ImageField(required=False, write_only=True)
+    profile_pic_url = serializers.SerializerMethodField(read_only=True)
+
+    class Meta:
+        model = User
+        fields = ("full_name", "profile_pic", "profile_pic_url")
+
+    def get_profile_pic_url(self, obj):
+        if not obj.profile_pic:
+            return None
+        pic = obj.profile_pic
+        # CloudinaryField returns a CloudinaryResource with .url; fallback for plain str
+        if hasattr(pic, "url"):
+            return pic.url
+        import cloudinary
+        return cloudinary.CloudinaryImage(str(pic)).build_url()
+
+    def update(self, instance, validated_data):
+        import cloudinary.uploader
+
+        image_file = validated_data.pop("profile_pic", None)
+        if image_file:
+            upload_result = cloudinary.uploader.upload(
+                image_file,
+                folder="profile_pics",
+                public_id=f"user_{instance.id}",
+                overwrite=True,
+                resource_type="image",
+            )
+            instance.profile_pic = upload_result["public_id"]
+
+        return super().update(instance, validated_data)
+
+
+class PaypalWithdrawHistorySerializer(serializers.ModelSerializer):
+    status_display = serializers.CharField(source="get_status_display", read_only=True)
+
+    class Meta:
+        model = WithdrawTransaction
+        fields = (
+            "id",
+            "paypal_email",
+            "amount",
+            "fee",
+            "net_amount",
+            "status",
+            "status_display",
+            "transaction_ref",
+            "description",
+            "created_at",
+        )
+        read_only_fields = fields
+
+
+class BankWithdrawHistorySerializer(serializers.ModelSerializer):
+    status_display = serializers.CharField(source="get_status_display", read_only=True)
+
+    class Meta:
+        model = WithdrawTransaction
+        fields = (
+            "id",
+            "bank_name",
+            "account_number_last4",
+            "amount",
+            "fee",
+            "net_amount",
+            "status",
+            "status_display",
+            "transaction_ref",
+            "description",
+            "created_at",
+        )
+        read_only_fields = fields

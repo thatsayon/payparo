@@ -7,7 +7,7 @@ from django.db import transaction as db_transaction
 from django.views.decorators.csrf import csrf_exempt
 from django.utils.decorators import method_decorator
 
-from rest_framework import permissions, status, generics, mixins
+from rest_framework import permissions, status, generics, mixins, parsers
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.parsers import JSONParser
 from rest_framework.response import Response
@@ -18,7 +18,8 @@ from .models import (
     Wallet, 
     WalletTransaction,
     BankAccount,
-    PaypalAccount
+    PaypalAccount,
+    WithdrawTransaction,
 )
 
 from .serializers import (
@@ -29,6 +30,9 @@ from .serializers import (
     BankAccountSerializer,
     PaypalAccountSerializer,
     PhoneNumberSerializer,
+    ProfileUpdateSerializer,
+    PaypalWithdrawHistorySerializer,
+    BankWithdrawHistorySerializer,
 )
 
 logger = logging.getLogger(__name__)
@@ -451,3 +455,75 @@ class UpdatePhoneNumberView(generics.UpdateAPIView):
     def get_object(self):
         return self.request.user
 
+
+class UpdateProfileView(generics.UpdateAPIView):
+    """
+    PATCH or PUT to update the authenticated user's full name and/or profile picture.
+    Accepts multipart/form-data (for file uploads).
+    """
+    serializer_class = ProfileUpdateSerializer
+    permission_classes = [permissions.IsAuthenticated]
+    parser_classes = [parsers.MultiPartParser, parsers.FormParser]
+
+    def get_object(self):
+        return self.request.user
+
+
+# ──────────────────────────────────────────────
+# Withdraw History
+# ──────────────────────────────────────────────
+
+class PaypalWithdrawHistoryView(APIView):
+    """
+    GET — Paginated list of the authenticated user's PayPal withdrawal history.
+    """
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        transactions = WithdrawTransaction.objects.filter(
+            user=request.user,
+            method=WithdrawTransaction.Method.PAYPAL,
+        )
+
+        paginator = PageNumberPagination()
+        page = paginator.paginate_queryset(transactions, request, view=self)
+
+        serializer = PaypalWithdrawHistorySerializer(page, many=True)
+        return Response(
+            {
+                "success": True,
+                "count": paginator.page.paginator.count,
+                "next": paginator.get_next_link(),
+                "previous": paginator.get_previous_link(),
+                "results": serializer.data,
+            },
+            status=status.HTTP_200_OK,
+        )
+
+
+class BankWithdrawHistoryView(APIView):
+    """
+    GET — Paginated list of the authenticated user's Bank withdrawal history.
+    """
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        transactions = WithdrawTransaction.objects.filter(
+            user=request.user,
+            method=WithdrawTransaction.Method.BANK,
+        )
+
+        paginator = PageNumberPagination()
+        page = paginator.paginate_queryset(transactions, request, view=self)
+
+        serializer = BankWithdrawHistorySerializer(page, many=True)
+        return Response(
+            {
+                "success": True,
+                "count": paginator.page.paginator.count,
+                "next": paginator.get_next_link(),
+                "previous": paginator.get_previous_link(),
+                "results": serializer.data,
+            },
+            status=status.HTTP_200_OK,
+        )
