@@ -94,6 +94,7 @@ class WalletTransactionSerializer(serializers.ModelSerializer):
 
 
 class ProfileHomeSerializer(serializers.ModelSerializer):
+    profile_pic = serializers.SerializerMethodField()
     kyc_status = serializers.CharField(read_only=True)
     total_completed_escrows = serializers.SerializerMethodField()
     rating = serializers.SerializerMethodField()
@@ -110,6 +111,15 @@ class ProfileHomeSerializer(serializers.ModelSerializer):
             'rating'
         )
 
+    def get_profile_pic(self, obj):
+        if not obj.profile_pic:
+            return None
+        
+        try:
+            return obj.profile_pic.url  # for CloudinaryField or ImageField
+        except:
+            return obj.profile_pic      # for URLField
+
     def get_total_completed_escrows(self, obj):
         return Escrow.objects.filter(
             Q(created_by=obj) | Q(receiver=obj),
@@ -119,7 +129,6 @@ class ProfileHomeSerializer(serializers.ModelSerializer):
     def get_rating(self, obj):
         avg = obj.received_reviews.aggregate(average=Avg('rating'))['average']
         return round(avg, 2) if avg else 0.0
-
 
 class BankAccountSerializer(serializers.ModelSerializer):
     class Meta:
