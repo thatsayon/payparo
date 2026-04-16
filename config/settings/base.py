@@ -52,6 +52,7 @@ INSTALLED_APPS += [
     'app.administration',
     'app.profile',
     'app.refer',
+    'app.notification',
 ]
 
 MIDDLEWARE = [
