@@ -219,3 +219,18 @@ STRIPE_PUBLISHABLE_KEY = env("STRIPE_PUBLISHABLE_KEY", default="")
 STRIPE_SECRET_KEY = env("STRIPE_SECRET_KEY", default="")
 STRIPE_WEBHOOK_SECRET = env("STRIPE_WEBHOOK_SECRET", default="")
 STRIPE_FEE_PERCENT = 3  # 3% processing fee passed to users
+
+# Email settings
+EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
+
+EMAIL_HOST = "smtp.hostinger.com"
+EMAIL_PORT = 465
+
+EMAIL_USE_TLS = False
+EMAIL_USE_SSL = True
+
+EMAIL_HOST_USER = "no-reply@ovation-app.com"
+EMAIL_HOST_PASSWORD = "OvationAPP123!"
+
+DEFAULT_FROM_EMAIL = "no-reply@ovation-app.com"
+
