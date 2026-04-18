@@ -86,10 +86,20 @@ class EscrowListCreateView(APIView):
             #     status=status.HTTP_403_FORBIDDEN,
             # )
 
-        if hasattr(request.data, "copy"):
-            data = request.data.copy()
-        else:
-            data = dict(request.data)
+        try:
+            if hasattr(request.data, "copy"):
+                data = request.data.copy()
+            else:
+                data = dict(request.data)
+        except TypeError:
+            # Usually happens when files (BufferedRandom) are in request.data and copy() tries to deepcopy them.
+            if hasattr(request.data, "lists"):
+                from django.http import QueryDict
+                data = QueryDict('', mutable=True)
+                for key, values in request.data.lists():
+                    data.setlist(key, values)
+            else:
+                data = dict(request.data)
 
         # Helper to extract list from QueryDict for cases like field[], field[0], etc.
         def extract_list(field_name, source, is_file=False):
