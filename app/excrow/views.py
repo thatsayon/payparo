@@ -79,11 +79,12 @@ class EscrowListCreateView(APIView):
 
     def post(self, request):
         # KYC gate — only users with approved KYC can create escrows
-        # if request.user.kyc_status != "approved":
-        #     return Response(
-        #         {"error": "Your KYC must be verified before creating an escrow."},
-        #         status=status.HTTP_403_FORBIDDEN,
-        #     )
+        if request.user.kyc_status != "approved":
+            pass
+            # return Response(
+            #     {"error": "Your KYC must be verified before creating an escrow."},
+            #     status=status.HTTP_403_FORBIDDEN,
+            # )
 
         if hasattr(request.data, "copy"):
             data = request.data.copy()
