@@ -1,7 +1,7 @@
 from django.db.models import CharField, Count, OuterRef, Q, Subquery, Value
 from django.db.models.functions import Coalesce
 
-from rest_framework import permissions, status
+from rest_framework import generics, permissions, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
@@ -112,3 +112,41 @@ class EscrowTransactionsView(APIView):
             status=status.HTTP_200_OK
         )
         pass
+
+
+class KYCSubmissionListView(generics.ListAPIView):
+    """
+    List all KYC submissions with pagination and search filter.
+    GET /administration/kyc-requests/?q=<search>&status=<status>
+    """
+    permission_classes = [permissions.IsAdminUser]
+    serializer_class = __import__('app.administration.serializers', fromlist=['KYCSubmissionListSerializer']).KYCSubmissionListSerializer
+
+    def get_queryset(self):
+        queryset = KYCSubmission.objects.select_related('user').order_by('-submitted_at')
+        search_query = self.request.query_params.get("q", "").strip()
+        status_filter = self.request.query_params.get("status", "").strip().lower()
+
+        if search_query:
+            queryset = queryset.filter(
+                Q(user__full_name__icontains=search_query)
+                | Q(user__email__icontains=search_query)
+                | Q(user__username__icontains=search_query)
+                | Q(id__icontains=search_query)
+            )
+
+        if status_filter:
+            queryset = queryset.filter(status=status_filter)
+
+        return queryset
+
+
+class KYCSubmissionStatusUpdateView(generics.UpdateAPIView):
+    """
+    Update a KYC submission's status (e.g. approve or reject).
+    PATCH /administration/kyc-requests/<id>/status/
+    """
+    permission_classes = [permissions.IsAdminUser]
+    serializer_class = __import__('app.administration.serializers', fromlist=['KYCStatusUpdateSerializer']).KYCStatusUpdateSerializer
+    queryset = KYCSubmission.objects.all()
+    http_method_names = ['patch']

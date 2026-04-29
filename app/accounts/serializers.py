@@ -40,6 +40,14 @@ class LoginSerializer(serializers.Serializer):
 class UpdatePasswordSerializer(serializers.Serializer):
     current_password = serializers.CharField()
     new_password = serializers.CharField(min_length=4)
+    retype_new_password = serializers.CharField(min_length=4)
+
+    def validate(self, attrs):
+        if attrs.get("new_password") != attrs.get("retype_new_password"):
+            raise serializers.ValidationError(
+                {"retype_new_password": "New passwords do not match."}
+            )
+        return attrs
 
 
 class VerifyLogin2FASerializer(serializers.Serializer):

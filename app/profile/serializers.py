@@ -175,17 +175,12 @@ class ProfileUpdateSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = User
-        fields = ("full_name", "profile_pic", "profile_pic_url")
+        fields = ("full_name", "email", "profile_pic", "profile_pic_url")
 
     def get_profile_pic_url(self, obj):
         if not obj.profile_pic:
             return None
-        pic = obj.profile_pic
-        # CloudinaryField returns a CloudinaryResource with .url; fallback for plain str
-        if hasattr(pic, "url"):
-            return pic.url
-        import cloudinary
-        return cloudinary.CloudinaryImage(str(pic)).build_url()
+        return obj.profile_pic.url if hasattr(obj.profile_pic, 'url') else None
 
     def update(self, instance, validated_data):
         import cloudinary.uploader

@@ -35,3 +35,39 @@ class EscrowTransactionsSerializer(serializers.ModelSerializer):
             'receiver',
             'product_name',
         )
+
+class KYCSubmissionListSerializer(serializers.ModelSerializer):
+    user_email = serializers.EmailField(source='user.email', read_only=True)
+    user_full_name = serializers.CharField(source='user.full_name', read_only=True)
+
+    class Meta:
+        from app.accounts.models import KYCSubmission
+        model = KYCSubmission
+        fields = (
+            'id',
+            'user',
+            'user_email',
+            'user_full_name',
+            'status',
+            'rejection_reason',
+            'submitted_at',
+            'reviewed_at',
+        )
+
+class KYCStatusUpdateSerializer(serializers.ModelSerializer):
+    class Meta:
+        from app.accounts.models import KYCSubmission
+        model = KYCSubmission
+        fields = ('status', 'rejection_reason')
+        
+    def update(self, instance, validated_data):
+        from django.utils import timezone
+        
+        new_status = validated_data.get('status', instance.status)
+        instance.status = new_status
+        instance.rejection_reason = validated_data.get('rejection_reason', instance.rejection_reason)
+        # Assuming we mark it as reviewed if it's approved or rejected
+        if new_status in [instance.Status.APPROVED, instance.Status.REJECTED]:
+            instance.reviewed_at = timezone.now()
+        instance.save()
+        return instance
