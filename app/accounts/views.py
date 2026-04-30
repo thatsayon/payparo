@@ -348,6 +348,11 @@ class LoginView(APIView):
                 "access": tokens["access"],
                 "refresh": tokens["refresh"],
                 "kyc_status": user.kyc_status,
+                "user": {
+                    "role": "admin" if user.is_staff else "user",
+                    "email": user.email,
+                    "full_name": user.full_name or "",
+                }
             },
             status=status.HTTP_200_OK,
         )
@@ -402,6 +407,11 @@ class VerifyLogin2FAView(APIView):
                 "access": tokens["access"],
                 "refresh": tokens["refresh"],
                 "kyc_status": user.kyc_status,
+                "user": {
+                    "role": "admin" if user.is_staff else "user",
+                    "email": user.email,
+                    "full_name": user.full_name or "",
+                }
             },
             status=status.HTTP_200_OK,
         )
