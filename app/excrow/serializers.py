@@ -335,48 +335,90 @@ class OrderHistoryDetailSerializer(serializers.ModelSerializer):
 
     def get_available_actions(self, obj):
         """
-        Returns a list of action strings the requesting user can currently perform.
+        Always returns a list of action objects for the requesting user so the
+        frontend knows which button to render and whether to enable or disable it.
 
-        Action keys:
-          - "accept"       → receiver-only, status must be CREATED
-          - "send_product" → seller party, status must be ACCEPTED
-          - "delivered"    → buyer party,  status must be IN_PROGRESS
+        Each action object:
+          {
+            "action":  str,          # API action key
+            "label":   str,          # Human-readable button label
+            "enabled": bool,         # Whether the button should be active
+            "message": str | null    # Reason shown when disabled (null when enabled)
+          }
 
-        The seller party is:
-          created_by  when escrow.role == 'seller'
-          receiver    when escrow.role == 'buyer'
-
-        The buyer party is the opposite.
+        Party resolution:
+          escrow.role == 'seller'  →  created_by is seller,  receiver is buyer
+          escrow.role == 'buyer'   →  created_by is buyer,   receiver is seller
         """
         request = self.context.get("request")
         if not request or not request.user.is_authenticated:
             return []
 
         user = request.user
-        actions = []
+        s = obj.status
 
         # Resolve parties
         if obj.role == Escrow.Role.SELLER:
             seller_user_id = obj.created_by_id
             buyer_user_id  = obj.receiver_id
-        else:  # creator is buyer
+        else:
             seller_user_id = obj.receiver_id
             buyer_user_id  = obj.created_by_id
 
-        # ── accept ────────────────────────────────────────────────
-        # Only the receiver (second party) can accept, and only when CREATED
-        if user.id == obj.receiver_id and obj.status == Escrow.Status.CREATED:
-            actions.append("accept")
+        actions = []
 
-        # ── send_product ──────────────────────────────────────────
-        # Seller party can send the product when ACCEPTED
-        if user.id == seller_user_id and obj.status == Escrow.Status.ACCEPTED:
-            actions.append("send_product")
+        # ── RECEIVER (second party) ────────────────────────────────
+        # The receiver always sees Accept first (only relevant at CREATED)
+        if user.id == obj.receiver_id:
+            if s == Escrow.Status.CREATED:
+                actions.append({
+                    "action":  "accept",
+                    "label":   "Accept Order",
+                    "enabled": True,
+                    "message": None,
+                })
 
-        # ── delivered ─────────────────────────────────────────────
-        # Buyer party can confirm delivery when IN_PROGRESS
-        if user.id == buyer_user_id and obj.status == Escrow.Status.IN_PROGRESS:
-            actions.append("delivered")
+        # ── SELLER PARTY ───────────────────────────────────────────
+        if user.id == seller_user_id:
+            if s == Escrow.Status.CREATED:
+                actions.append({
+                    "action":  "send_product",
+                    "label":   "Send Product",
+                    "enabled": False,
+                    "message": "Waiting for the buyer to accept the order first.",
+                })
+            elif s == Escrow.Status.ACCEPTED:
+                actions.append({
+                    "action":  "send_product",
+                    "label":   "Send Product",
+                    "enabled": True,
+                    "message": None,
+                })
+
+        # ── BUYER PARTY ────────────────────────────────────────────
+        if user.id == buyer_user_id:
+            if s == Escrow.Status.CREATED:
+                actions.append({
+                    "action":  "delivered",
+                    "label":   "Mark as Delivered",
+                    "enabled": False,
+                    "message": "Waiting for the seller to accept and ship the order.",
+                })
+            elif s == Escrow.Status.ACCEPTED:
+                actions.append({
+                    "action":  "delivered",
+                    "label":   "Mark as Delivered",
+                    "enabled": False,
+                    "message": "Waiting for the seller to ship the product.",
+                })
+            elif s == Escrow.Status.IN_PROGRESS:
+                actions.append({
+                    "action":  "delivered",
+                    "label":   "Mark as Delivered",
+                    "enabled": True,
+                    "message": None,
+                })
 
         return actions
+
 
