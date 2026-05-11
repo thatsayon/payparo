@@ -231,7 +231,12 @@ class UserSearchView(APIView):
 class OrderHistory(generics.ListAPIView):
     permission_classes = [permissions.IsAuthenticated]
     serializer_class = OrderHistorySerializer
-    queryset = Escrow.objects.all()
+
+    def get_queryset(self):
+        user = self.request.user
+        return Escrow.objects.filter(
+            Q(created_by=user) | Q(receiver=user)
+        ).select_related("created_by", "receiver")
 
 
 class OrderHistoryDetailView(APIView):

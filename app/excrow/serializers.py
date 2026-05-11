@@ -265,12 +265,25 @@ class EscrowDetailSerializer(serializers.ModelSerializer):
 
 
 class OrderHistorySerializer(serializers.ModelSerializer):
+    user_role = serializers.SerializerMethodField()
 
     class Meta:
         model = Escrow
         fields = [
-            "id", "order_id", "product_name", "status", "created_at"
+            "id", "order_id", "product_name", "status", "created_at", "user_role"
         ]
+
+    def get_user_role(self, obj):
+        request = self.context.get("request")
+        if not request or not request.user.is_authenticated:
+            return None
+        
+        user = request.user
+        if obj.created_by_id == user.id:
+            return obj.role
+        elif obj.receiver_id == user.id:
+            return Escrow.Role.BUYER if obj.role == Escrow.Role.SELLER else Escrow.Role.SELLER
+        return None
 
 
 class OrderHistoryDetailSerializer(serializers.ModelSerializer):
@@ -278,15 +291,28 @@ class OrderHistoryDetailSerializer(serializers.ModelSerializer):
     receiver   = ReceiverSerializer(read_only=True)
     cover_image = serializers.SerializerMethodField()
     status_history = EscrowStatusHistorySerializer(many=True, read_only=True)
+    user_role = serializers.SerializerMethodField()
 
     class Meta:
         model = Escrow
         fields = [
             "id", "order_id", "product_name", "price", 
             "created_by", "receiver", "cover_image", 
-            "status", "status_history", "created_at"
+            "status", "status_history", "created_at", "user_role"
         ]
 
     def get_cover_image(self, obj):
         first = obj.images.first()
         return first.image.url if first else None
+
+    def get_user_role(self, obj):
+        request = self.context.get("request")
+        if not request or not request.user.is_authenticated:
+            return None
+        
+        user = request.user
+        if obj.created_by_id == user.id:
+            return obj.role
+        elif obj.receiver_id == user.id:
+            return Escrow.Role.BUYER if obj.role == Escrow.Role.SELLER else Escrow.Role.SELLER
+        return None
