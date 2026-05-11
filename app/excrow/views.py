@@ -288,7 +288,8 @@ class OrderHistoryDetailView(APIView):
 
 class EscrowAcceptView(APIView):
     """
-    POST — Receiver accepts the Escrow request.
+    POST — The receiver (the other party) accepts the Escrow request.
+    Only callable when status is CREATED.
     """
     permission_classes = [permissions.IsAuthenticated]
 
@@ -301,12 +302,85 @@ class EscrowAcceptView(APIView):
         if escrow.receiver != request.user:
             return Response({"error": "Only the receiver can accept this Escrow."}, status=status.HTTP_403_FORBIDDEN)
 
-        # Ensure it's in a state that can be accepted
-        if escrow.status not in [Escrow.Status.CREATED, Escrow.Status.FUNDED]:
-            return Response({"error": f"Escrow cannot be accepted from {escrow.get_status_display()} state."}, status=status.HTTP_400_BAD_REQUEST)
+        if escrow.status != Escrow.Status.CREATED:
+            return Response({"error": f"Escrow cannot be accepted from '{escrow.get_status_display()}' state."}, status=status.HTTP_400_BAD_REQUEST)
 
         escrow.status = Escrow.Status.ACCEPTED
         escrow.save()
 
-        return Response({"success": True, "message": "Escrow accepted successfully."}, status=status.HTTP_200_OK)
+        return Response({"success": True, "message": "Escrow accepted successfully.", "status": escrow.status}, status=status.HTTP_200_OK)
+
+
+class EscrowSendProductView(APIView):
+    """
+    POST — The seller party marks the product/service as sent (shipped).
+
+    The seller party is:
+      - created_by  when escrow.role == 'seller'  (creator is the seller)
+      - receiver    when escrow.role == 'buyer'   (receiver is the seller)
+
+    Allowed when status == ACCEPTED  →  transitions to IN_PROGRESS.
+    """
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request, pk):
+        try:
+            escrow = Escrow.objects.get(pk=pk)
+        except Escrow.DoesNotExist:
+            return Response({"error": "Escrow not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        user = request.user
+        # Determine who is the seller in this escrow
+        if escrow.role == Escrow.Role.SELLER:
+            seller_user = escrow.created_by
+        else:
+            seller_user = escrow.receiver
+
+        if user != seller_user:
+            return Response({"error": "Only the seller can mark the product as sent."}, status=status.HTTP_403_FORBIDDEN)
+
+        if escrow.status != Escrow.Status.ACCEPTED:
+            return Response({"error": f"Product can only be sent when status is 'Accepted'. Current: '{escrow.get_status_display()}'."}, status=status.HTTP_400_BAD_REQUEST)
+
+        escrow.status = Escrow.Status.IN_PROGRESS
+        escrow.save()
+
+        return Response({"success": True, "message": "Product marked as sent. Status updated to In Progress.", "status": escrow.status}, status=status.HTTP_200_OK)
+
+
+class EscrowDeliveredView(APIView):
+    """
+    POST — The buyer party confirms delivery.
+
+    The buyer party is:
+      - created_by  when escrow.role == 'buyer'   (creator is the buyer)
+      - receiver    when escrow.role == 'seller'  (receiver is the buyer)
+
+    Allowed when status == IN_PROGRESS  →  transitions to DELIVERED.
+    """
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request, pk):
+        try:
+            escrow = Escrow.objects.get(pk=pk)
+        except Escrow.DoesNotExist:
+            return Response({"error": "Escrow not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        user = request.user
+        # Determine who is the buyer in this escrow
+        if escrow.role == Escrow.Role.BUYER:
+            buyer_user = escrow.created_by
+        else:
+            buyer_user = escrow.receiver
+
+        if user != buyer_user:
+            return Response({"error": "Only the buyer can confirm delivery."}, status=status.HTTP_403_FORBIDDEN)
+
+        if escrow.status != Escrow.Status.IN_PROGRESS:
+            return Response({"error": f"Delivery can only be confirmed when status is 'In Progress'. Current: '{escrow.get_status_display()}'."}, status=status.HTTP_400_BAD_REQUEST)
+
+        escrow.status = Escrow.Status.DELIVERED
+        escrow.save()
+
+        return Response({"success": True, "message": "Delivery confirmed. Status updated to Delivered.", "status": escrow.status}, status=status.HTTP_200_OK)
 

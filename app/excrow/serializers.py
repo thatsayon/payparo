@@ -300,13 +300,15 @@ class OrderHistoryDetailSerializer(serializers.ModelSerializer):
     status_history = EscrowStatusHistorySerializer(many=True, read_only=True)
     user_role = serializers.SerializerMethodField()
     is_creator = serializers.SerializerMethodField()
+    available_actions = serializers.SerializerMethodField()
 
     class Meta:
         model = Escrow
         fields = [
             "id", "order_id", "product_name", "price", 
             "created_by", "receiver", "cover_image", 
-            "status", "status_history", "created_at", "user_role", "is_creator"
+            "status", "status_history", "created_at",
+            "user_role", "is_creator", "available_actions"
         ]
 
     def get_cover_image(self, obj):
@@ -330,3 +332,51 @@ class OrderHistoryDetailSerializer(serializers.ModelSerializer):
         if not request or not request.user.is_authenticated:
             return False
         return obj.created_by_id == request.user.id
+
+    def get_available_actions(self, obj):
+        """
+        Returns a list of action strings the requesting user can currently perform.
+
+        Action keys:
+          - "accept"       → receiver-only, status must be CREATED
+          - "send_product" → seller party, status must be ACCEPTED
+          - "delivered"    → buyer party,  status must be IN_PROGRESS
+
+        The seller party is:
+          created_by  when escrow.role == 'seller'
+          receiver    when escrow.role == 'buyer'
+
+        The buyer party is the opposite.
+        """
+        request = self.context.get("request")
+        if not request or not request.user.is_authenticated:
+            return []
+
+        user = request.user
+        actions = []
+
+        # Resolve parties
+        if obj.role == Escrow.Role.SELLER:
+            seller_user_id = obj.created_by_id
+            buyer_user_id  = obj.receiver_id
+        else:  # creator is buyer
+            seller_user_id = obj.receiver_id
+            buyer_user_id  = obj.created_by_id
+
+        # ── accept ────────────────────────────────────────────────
+        # Only the receiver (second party) can accept, and only when CREATED
+        if user.id == obj.receiver_id and obj.status == Escrow.Status.CREATED:
+            actions.append("accept")
+
+        # ── send_product ──────────────────────────────────────────
+        # Seller party can send the product when ACCEPTED
+        if user.id == seller_user_id and obj.status == Escrow.Status.ACCEPTED:
+            actions.append("send_product")
+
+        # ── delivered ─────────────────────────────────────────────
+        # Buyer party can confirm delivery when IN_PROGRESS
+        if user.id == buyer_user_id and obj.status == Escrow.Status.IN_PROGRESS:
+            actions.append("delivered")
+
+        return actions
+
