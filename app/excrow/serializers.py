@@ -266,11 +266,12 @@ class EscrowDetailSerializer(serializers.ModelSerializer):
 
 class OrderHistorySerializer(serializers.ModelSerializer):
     user_role = serializers.SerializerMethodField()
+    is_creator = serializers.SerializerMethodField()
 
     class Meta:
         model = Escrow
         fields = [
-            "id", "order_id", "product_name", "status", "created_at", "user_role"
+            "id", "order_id", "product_name", "status", "created_at", "user_role", "is_creator"
         ]
 
     def get_user_role(self, obj):
@@ -285,6 +286,12 @@ class OrderHistorySerializer(serializers.ModelSerializer):
             return Escrow.Role.BUYER if obj.role == Escrow.Role.SELLER else Escrow.Role.SELLER
         return None
 
+    def get_is_creator(self, obj):
+        request = self.context.get("request")
+        if not request or not request.user.is_authenticated:
+            return False
+        return obj.created_by_id == request.user.id
+
 
 class OrderHistoryDetailSerializer(serializers.ModelSerializer):
     created_by = ReceiverSerializer(read_only=True)
@@ -292,13 +299,14 @@ class OrderHistoryDetailSerializer(serializers.ModelSerializer):
     cover_image = serializers.SerializerMethodField()
     status_history = EscrowStatusHistorySerializer(many=True, read_only=True)
     user_role = serializers.SerializerMethodField()
+    is_creator = serializers.SerializerMethodField()
 
     class Meta:
         model = Escrow
         fields = [
             "id", "order_id", "product_name", "price", 
             "created_by", "receiver", "cover_image", 
-            "status", "status_history", "created_at", "user_role"
+            "status", "status_history", "created_at", "user_role", "is_creator"
         ]
 
     def get_cover_image(self, obj):
@@ -316,3 +324,9 @@ class OrderHistoryDetailSerializer(serializers.ModelSerializer):
         elif obj.receiver_id == user.id:
             return Escrow.Role.BUYER if obj.role == Escrow.Role.SELLER else Escrow.Role.SELLER
         return None
+
+    def get_is_creator(self, obj):
+        request = self.context.get("request")
+        if not request or not request.user.is_authenticated:
+            return False
+        return obj.created_by_id == request.user.id
