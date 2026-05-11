@@ -234,9 +234,37 @@ class OrderHistory(generics.ListAPIView):
 
     def get_queryset(self):
         user = self.request.user
-        return Escrow.objects.filter(
+        queryset = Escrow.objects.filter(
             Q(created_by=user) | Q(receiver=user)
         ).select_related("created_by", "receiver")
+
+        status_param = self.request.query_params.get("status")
+        role_param = self.request.query_params.get("role")
+        search_param = self.request.query_params.get("search")
+
+        if status_param:
+            queryset = queryset.filter(status__iexact=status_param)
+
+        if role_param:
+            role_param = role_param.lower()
+            if role_param == "seller":
+                queryset = queryset.filter(
+                    Q(created_by=user, role=Escrow.Role.SELLER) |
+                    Q(receiver=user, role=Escrow.Role.BUYER)
+                )
+            elif role_param == "buyer":
+                queryset = queryset.filter(
+                    Q(created_by=user, role=Escrow.Role.BUYER) |
+                    Q(receiver=user, role=Escrow.Role.SELLER)
+                )
+
+        if search_param:
+            queryset = queryset.filter(
+                Q(product_name__icontains=search_param) |
+                Q(order_id__icontains=search_param)
+            )
+
+        return queryset.order_by("-created_at")
 
 
 class OrderHistoryDetailView(APIView):
