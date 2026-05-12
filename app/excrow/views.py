@@ -14,6 +14,7 @@ from .serializers import (
     ReceiverSerializer,
     OrderHistorySerializer,
     OrderHistoryDetailSerializer,
+    DisputeListSerializer,
 )
 
 User = get_user_model()
@@ -444,7 +445,7 @@ class DisputeListView(APIView):
         paginator = PageNumberPagination()
         paginated = paginator.paginate_queryset(queryset, request, view=self)
 
-        serializer = EscrowListSerializer(paginated, many=True)
+        serializer = DisputeListSerializer(paginated, many=True, context={"request": request})
         return Response(
             {
                 "success": True,

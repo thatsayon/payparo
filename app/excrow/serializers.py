@@ -422,3 +422,22 @@ class OrderHistoryDetailSerializer(serializers.ModelSerializer):
         return actions
 
 
+class DisputeListSerializer(serializers.ModelSerializer):
+    """Slim serializer for the disputes list: id, product_name, status, user_role, total_amount."""
+    user_role = serializers.SerializerMethodField()
+
+    class Meta:
+        model  = Escrow
+        fields = ["id", "order_id", "product_name", "status", "user_role", "total_amount"]
+
+    def get_user_role(self, obj):
+        request = self.context.get("request")
+        if not request or not request.user.is_authenticated:
+            return None
+        user = request.user
+        if obj.created_by_id == user.id:
+            return obj.role  # seller or buyer as the creator chose
+        elif obj.receiver_id == user.id:
+            # receiver is always the opposite party
+            return Escrow.Role.BUYER if obj.role == Escrow.Role.SELLER else Escrow.Role.SELLER
+        return None
