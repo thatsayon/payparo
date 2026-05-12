@@ -403,8 +403,9 @@ class DisputeListView(APIView):
     The user is considered "connected" if they are either the creator
     (created_by) or the receiver of the escrow.
 
-    Supports optional query param:
-      ?status=<status>  — filter to a single status from the list above
+    Query params (all optional):
+      ?status=<status>  — filter to a single dispute status from the list above
+      ?search=<term>    — search by product name or order ID (case-insensitive)
     """
     permission_classes = [permissions.IsAuthenticated]
 
@@ -429,18 +430,29 @@ class DisputeListView(APIView):
             .order_by("-updated_at")
         )
 
-        # Optional single-status filter from the allowed dispute statuses
+        # Optional status filter (must be one of the dispute statuses)
         status_param = request.query_params.get("status", "").strip().lower()
         if status_param:
             allowed = {s.value for s in self.DISPUTE_STATUSES}
             if status_param not in allowed:
                 return Response(
                     {
-                        "error": f"Invalid status '{status_param}'. Allowed values: {', '.join(sorted(allowed))}."
+                        "error": (
+                            f"Invalid status '{status_param}'. "
+                            f"Allowed values: {', '.join(sorted(allowed))}."
+                        )
                     },
                     status=status.HTTP_400_BAD_REQUEST,
                 )
             queryset = queryset.filter(status=status_param)
+
+        # Optional search by product name or order ID
+        search_param = request.query_params.get("search", "").strip()
+        if search_param:
+            queryset = queryset.filter(
+                Q(product_name__icontains=search_param) |
+                Q(order_id__icontains=search_param)
+            )
 
         paginator = PageNumberPagination()
         paginated = paginator.paginate_queryset(queryset, request, view=self)
@@ -456,3 +468,4 @@ class DisputeListView(APIView):
             },
             status=status.HTTP_200_OK,
         )
+
