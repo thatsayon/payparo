@@ -384,3 +384,74 @@ class EscrowDeliveredView(APIView):
 
         return Response({"success": True, "message": "Delivery confirmed. Status updated to Delivered.", "status": escrow.status}, status=status.HTTP_200_OK)
 
+
+# ──────────────────────────────────────────────
+# Dispute / Issue Escrows
+# ──────────────────────────────────────────────
+
+class DisputeListView(APIView):
+    """
+    GET — List all escrows connected to the authenticated user that are
+    currently in a dispute or resolution state:
+
+      - issue_raised       — a party has raised an issue
+      - under_review       — the dispute is under review
+      - return_in_progress — a return has been initiated
+      - refunded           — a refund has been processed / resolved
+
+    The user is considered "connected" if they are either the creator
+    (created_by) or the receiver of the escrow.
+
+    Supports optional query param:
+      ?status=<status>  — filter to a single status from the list above
+    """
+    permission_classes = [permissions.IsAuthenticated]
+
+    DISPUTE_STATUSES = [
+        Escrow.Status.ISSUE_RAISED,
+        Escrow.Status.UNDER_REVIEW,
+        Escrow.Status.RETURN_IN_PROGRESS,
+        Escrow.Status.REFUNDED,
+    ]
+
+    def get(self, request):
+        user = request.user
+
+        queryset = (
+            Escrow.objects
+            .filter(
+                Q(created_by=user) | Q(receiver=user),
+                status__in=self.DISPUTE_STATUSES,
+            )
+            .select_related("created_by", "receiver")
+            .prefetch_related("images")
+            .order_by("-updated_at")
+        )
+
+        # Optional single-status filter from the allowed dispute statuses
+        status_param = request.query_params.get("status", "").strip().lower()
+        if status_param:
+            allowed = {s.value for s in self.DISPUTE_STATUSES}
+            if status_param not in allowed:
+                return Response(
+                    {
+                        "error": f"Invalid status '{status_param}'. Allowed values: {', '.join(sorted(allowed))}."
+                    },
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            queryset = queryset.filter(status=status_param)
+
+        paginator = PageNumberPagination()
+        paginated = paginator.paginate_queryset(queryset, request, view=self)
+
+        serializer = EscrowListSerializer(paginated, many=True)
+        return Response(
+            {
+                "success": True,
+                "count": paginator.page.paginator.count,
+                "next": paginator.get_next_link(),
+                "previous": paginator.get_previous_link(),
+                "results": serializer.data,
+            },
+            status=status.HTTP_200_OK,
+        )

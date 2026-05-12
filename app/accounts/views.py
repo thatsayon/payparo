@@ -626,8 +626,11 @@ class RefreshAccessTokenView(APIView):
                 {"access": str(refresh.access_token)},
                 status=status.HTTP_200_OK,
             )
-        except TokenError as e:
-            raise InvalidToken(e.args[0])
+        except TokenError:
+            return Response(
+                {"error": "Refresh token is invalid or has expired. Please log in again."},
+                status=status.HTTP_401_UNAUTHORIZED,
+            )
 
 
 # ──────────────────────────────────────────────
