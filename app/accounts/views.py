@@ -838,15 +838,21 @@ class KYCPublishView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        # Ensure at least the ID front and back images were uploaded
+        # Ensure all required images (ID and Face) were uploaded
         uploaded_types = set(
             submission.documents
             .values_list("document_type", flat=True)
         )
-        required = {KYCDocument.DocType.ID_FRONT, KYCDocument.DocType.ID_BACK}
+        required = {
+            KYCDocument.DocType.ID_FRONT, 
+            KYCDocument.DocType.ID_BACK,
+            KYCDocument.DocType.FACE_FRONT,
+            KYCDocument.DocType.FACE_LEFT,
+            KYCDocument.DocType.FACE_RIGHT
+        }
         if not required.issubset(uploaded_types):
             return Response(
-                {"error": "Please upload both the front and back of your ID card first."},
+                {"error": "Please complete all document uploads (ID and face images) before submitting."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -906,7 +912,7 @@ class KYCPublishView(APIView):
 
 class KYCUploadFaceView(APIView):
     """
-    Upload three face images after KYC has been published (UNDER_REVIEW).
+    Upload three face images for KYC verification (status: PENDING).
 
     Fields:
       front_face  — straight-on front face
@@ -917,22 +923,15 @@ class KYCUploadFaceView(APIView):
     parser_classes = [MultiPartParser, FormParser]
 
     def post(self, request):
-        submission = (
-            KYCSubmission.objects
-            .filter(user=request.user, status=KYCSubmission.Status.UNDER_REVIEW)
-            .first()
-        )
-        if not submission:
-            if KYCSubmission.objects.filter(
-                user=request.user,
-                status=KYCSubmission.Status.APPROVED,
-            ).exists():
-                return Response(
-                    {"error": "KYC is already approved."},
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
+        if KYCSubmission.objects.filter(user=request.user, status=KYCSubmission.Status.APPROVED).exists():
             return Response(
-                {"error": "No submitted KYC found. Please complete kyc/publish/ first."},
+                {"error": "KYC is already approved."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+            
+        if KYCSubmission.objects.filter(user=request.user, status=KYCSubmission.Status.UNDER_REVIEW).exists():
+            return Response(
+                {"error": "KYC is currently under review."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -951,6 +950,11 @@ class KYCUploadFaceView(APIView):
 
         import cloudinary.uploader
         with transaction.atomic():
+            submission, _ = KYCSubmission.objects.get_or_create(
+                user=request.user,
+                status=KYCSubmission.Status.PENDING,
+            )
+
             # Remove previous face uploads for this submission from Cloudinary and DB
             old_docs = KYCDocument.objects.filter(
                 submission=submission,
