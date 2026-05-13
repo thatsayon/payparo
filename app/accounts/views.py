@@ -756,17 +756,22 @@ class KYCUploadIDCardView(APIView):
         from .kyc_ocr import extract_id_card_fields
         extracted = extract_id_card_fields(serializer.validated_data["id_front"])
 
+        import cloudinary.uploader
         with transaction.atomic():
             submission, _ = KYCSubmission.objects.get_or_create(
                 user=request.user,
                 status=KYCSubmission.Status.PENDING,
             )
             
-            # Remove any previously uploaded ID cards for this pending submission
-            KYCDocument.objects.filter(
+            # Remove any previously uploaded ID cards for this pending submission from Cloudinary and DB
+            old_id_docs = KYCDocument.objects.filter(
                 submission=submission, 
                 document_type__in=[KYCDocument.DocType.ID_FRONT, KYCDocument.DocType.ID_BACK]
-            ).delete()
+            )
+            for doc in old_id_docs:
+                if doc.image and hasattr(doc.image, 'public_id'):
+                    cloudinary.uploader.destroy(doc.image.public_id)
+                doc.delete()
             
             KYCDocument.objects.create(
                 submission=submission,
@@ -944,12 +949,17 @@ class KYCUploadFaceView(APIView):
             KYCDocument.DocType.FACE_RIGHT: serializer.validated_data["right_face"],
         }
 
+        import cloudinary.uploader
         with transaction.atomic():
-            # Remove previous face uploads for this submission
-            KYCDocument.objects.filter(
+            # Remove previous face uploads for this submission from Cloudinary and DB
+            old_docs = KYCDocument.objects.filter(
                 submission=submission,
                 document_type__in=list(face_map.keys()),
-            ).delete()
+            )
+            for doc in old_docs:
+                if doc.image and hasattr(doc.image, 'public_id'):
+                    cloudinary.uploader.destroy(doc.image.public_id)
+                doc.delete()
 
             for doc_type, image in face_map.items():
                 KYCDocument.objects.create(
