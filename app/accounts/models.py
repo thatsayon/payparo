@@ -37,6 +37,7 @@ class CustomAccountManager(BaseUserManager):
         extra_fields.setdefault("is_staff", True)
         extra_fields.setdefault("is_superuser", True)
         extra_fields.setdefault("is_active", True)
+        extra_fields.setdefault("role", "admin")
 
         if not extra_fields.get("is_staff"):
             raise ValueError("Superuser must have is_staff=True")
@@ -72,6 +73,11 @@ class UserAccount(AbstractBaseUser, PermissionsMixin, BaseModel):
         EMAIL = "email", "Email"
         SMS = "sms", "SMS"
         BOTH = "both", "Email + SMS"
+
+    class Role(models.TextChoices):
+        USER = "user", "User"
+        ADMIN = "admin", "Admin"
+        KYC = "kyc", "KYC Specialist"
 
     email = models.EmailField(
         _("email address"),
@@ -112,6 +118,13 @@ class UserAccount(AbstractBaseUser, PermissionsMixin, BaseModel):
     is_staff = models.BooleanField(default=False)
     is_active = models.BooleanField(default=True)
     is_banned = models.BooleanField(default=False)
+
+    role = models.CharField(
+        max_length=10,
+        choices=Role.choices,
+        default=Role.USER,
+    )
+    resolved_issues_count = models.PositiveIntegerField(default=0)
 
     date_joined = models.DateTimeField(default=timezone.now)
 
@@ -268,3 +281,19 @@ class KYCIdentity(models.Model):
     permanent_address = models.TextField()
 
     gender = models.CharField(max_length=10)
+
+
+import uuid
+
+class Invitation(BaseModel):
+    email = models.EmailField(unique=True)
+    role = models.CharField(
+        max_length=10,
+        choices=UserAccount.Role.choices,
+        default=UserAccount.Role.KYC,
+    )
+    token = models.CharField(max_length=100, unique=True, default=uuid.uuid4)
+    is_accepted = models.BooleanField(default=False)
+
+    def __str__(self):
+        return f"Invitation for {self.email} ({self.role})"

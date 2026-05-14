@@ -349,7 +349,7 @@ class LoginView(APIView):
                 "refresh": tokens["refresh"],
                 "kyc_status": user.kyc_status,
                 "user": {
-                    "role": "admin" if user.is_staff else "user",
+                    "role": user.role,
                     "email": user.email,
                     "full_name": user.full_name or "",
                 }
@@ -408,7 +408,7 @@ class VerifyLogin2FAView(APIView):
                 "refresh": tokens["refresh"],
                 "kyc_status": user.kyc_status,
                 "user": {
-                    "role": "admin" if user.is_staff else "user",
+                    "role": user.role,
                     "email": user.email,
                     "full_name": user.full_name or "",
                 }

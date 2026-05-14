@@ -1,6 +1,7 @@
 {% load static %}
 <!doctype html>
 <html lang="en">
+
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -23,12 +24,15 @@
       --radius: 14px;
     }
 
-    * { box-sizing: border-box; }
+    * {
+      box-sizing: border-box;
+    }
+
     body {
       margin: 0;
       min-height: 100vh;
       background:
-        radial-gradient(circle at top left, rgba(255,255,255,0.06), transparent 28%),
+        radial-gradient(circle at top left, rgba(255, 255, 255, 0.06), transparent 28%),
         linear-gradient(180deg, #09090d 0%, #0f1014 100%);
       color: var(--text);
       font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
@@ -60,7 +64,7 @@
 
     .card {
       background: rgba(23, 24, 29, 0.92);
-      border: 1px solid rgba(255,255,255,0.06);
+      border: 1px solid rgba(255, 255, 255, 0.06);
       border-radius: var(--radius);
       box-shadow: var(--shadow);
       backdrop-filter: blur(14px);
@@ -125,7 +129,7 @@
 
     .content-header {
       padding: 22px 24px 16px;
-      border-bottom: 1px solid rgba(255,255,255,0.05);
+      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
     }
 
     .content-title {
@@ -150,19 +154,19 @@
       font-weight: 500;
       color: var(--muted-2);
       padding: 14px 24px;
-      background: rgba(255,255,255,0.015);
-      border-bottom: 1px solid rgba(255,255,255,0.05);
+      background: rgba(255, 255, 255, 0.015);
+      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
     }
 
     tbody td {
       padding: 15px 24px;
-      border-bottom: 1px solid rgba(255,255,255,0.05);
+      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
       font-size: 14px;
       color: #e9edf6;
     }
 
     tbody tr:hover {
-      background: rgba(255,255,255,0.02);
+      background: rgba(255, 255, 255, 0.02);
     }
 
     .name {
@@ -185,11 +189,30 @@
       letter-spacing: 0.01em;
     }
 
-    .badge.pending { color: var(--orange); background: rgba(255, 174, 66, 0.09); }
-    .badge.review { color: var(--blue); background: rgba(110, 168, 255, 0.09); }
-    .badge.approved { color: var(--green); background: rgba(25, 195, 125, 0.09); }
-    .badge.rejected { color: var(--red); background: rgba(255, 107, 107, 0.09); }
-    .badge.muted { color: var(--muted); background: rgba(154, 161, 178, 0.09); }
+    .badge.pending {
+      color: var(--orange);
+      background: rgba(255, 174, 66, 0.09);
+    }
+
+    .badge.review {
+      color: var(--blue);
+      background: rgba(110, 168, 255, 0.09);
+    }
+
+    .badge.approved {
+      color: var(--green);
+      background: rgba(25, 195, 125, 0.09);
+    }
+
+    .badge.rejected {
+      color: var(--red);
+      background: rgba(255, 107, 107, 0.09);
+    }
+
+    .badge.muted {
+      color: var(--muted);
+      background: rgba(154, 161, 178, 0.09);
+    }
 
     .transactions {
       text-align: right;
@@ -226,12 +249,23 @@
     }
 
     @media (max-width: 860px) {
-      body { padding: 20px 14px 28px; }
-      .filters { grid-template-columns: 1fr; }
-      tbody td, thead th { padding-left: 16px; padding-right: 16px; }
+      body {
+        padding: 20px 14px 28px;
+      }
+
+      .filters {
+        grid-template-columns: 1fr;
+      }
+
+      tbody td,
+      thead th {
+        padding-left: 16px;
+        padding-right: 16px;
+      }
     }
   </style>
 </head>
+
 <body>
   <main class="page">
     <header class="header">
@@ -242,19 +276,22 @@
     <form method="get" class="card filters">
       <label class="field">
         <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-          <path d="M10.5 18a7.5 7.5 0 1 1 0-15 7.5 7.5 0 0 1 0 15Z" stroke="currentColor" stroke-width="1.8"/>
-          <path d="m16 16 4.5 4.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+          <path d="M10.5 18a7.5 7.5 0 1 1 0-15 7.5 7.5 0 0 1 0 15Z" stroke="currentColor" stroke-width="1.8" />
+          <path d="m16 16 4.5 4.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
         </svg>
-        <input class="input" type="search" name="q" value="{{ search_query }}" placeholder="Search by name, email or ID">
+        <input class="input" type="search" name="q" value="{{ search_query }}"
+          placeholder="Search by name, email or ID">
       </label>
 
       <label class="field">
         <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-          <path d="M4 5h16l-6.25 7.25V19l-3.5-1.9v-4.85L4 5Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>
+          <path d="M4 5h16l-6.25 7.25V19l-3.5-1.9v-4.85L4 5Z" stroke="currentColor" stroke-width="1.8"
+            stroke-linejoin="round" />
         </svg>
         <select class="select" name="status" onchange="this.form.submit()">
           {% for option_value, option_label in status_options %}
-            <option value="{{ option_value }}" {% if selected_status == option_value %}selected{% endif %}>{{ option_label }}</option>
+          <option value="{{ option_value }}" {% if selected_status==option_value %}selected{% endif %}>{{ option_label
+            }}</option>
           {% endfor %}
         </select>
       </label>
@@ -278,20 +315,20 @@
           </thead>
           <tbody>
             {% for user in users %}
-              <tr>
-                <td>
-                  <div class="name">{{ user.full_name }}</div>
-                </td>
-                <td class="email">{{ user.email }}</td>
-                <td><span class="badge {{ user.badge_class }}">{{ user.kyc_label }}</span></td>
-                <td class="transactions">{{ user.transaction_count }}</td>
-              </tr>
+            <tr>
+              <td>
+                <div class="name">{{ user.full_name }}</div>
+              </td>
+              <td class="email">{{ user.email }}</td>
+              <td><span class="badge {{ user.badge_class }}">{{ user.kyc_label }}</span></td>
+              <td class="transactions">{{ user.transaction_count }}</td>
+            </tr>
             {% endfor %}
           </tbody>
         </table>
       </div>
       {% else %}
-        <div class="empty">No users match the current filters.</div>
+      <div class="empty">No users match the current filters.</div>
       {% endif %}
     </section>
 
@@ -300,4 +337,5 @@
     </div>
   </main>
 </body>
+
 </html>

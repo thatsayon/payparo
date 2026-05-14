@@ -58,3 +58,28 @@ def send_login_otp_task(email, name, otp):
         recipient_list=[email],
     )
 
+
+@shared_task(bind=True, max_retries=3, default_retry_delay=10)
+def send_kyc_invitation_email_task(self, email: str, invitation_link: str):
+    """Send KYC specialist invitation email with a registration link."""
+    subject = "Payparo — You're Invited to Join as a KYC Specialist"
+    message = (
+        f"Hello,\n\n"
+        f"You have been invited to join Payparo as a KYC Specialist.\n\n"
+        f"Please click the link below to complete your registration:\n"
+        f"{invitation_link}\n\n"
+        f"This invitation link is unique to you. Do not share it with others.\n\n"
+        f"If you did not expect this invitation, please ignore this email.\n\n"
+        f"— Payparo Team"
+    )
+    try:
+        send_mail(
+            subject,
+            message,
+            settings.DEFAULT_FROM_EMAIL,
+            [email],
+            fail_silently=False,
+        )
+    except Exception as exc:
+        raise self.retry(exc=exc)
+

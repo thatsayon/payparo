@@ -20,6 +20,14 @@ from .views import (
     KYCPublishView,
     KYCUploadFaceView,
 )
+from .admin_views import (
+    InviteKYCView,
+    ResendInviteView,
+    ListKYCView,
+    RemoveKYCView,
+    AcceptInviteView,
+    VerifyInviteTokenView,
+)
 
 urlpatterns = [
     # Registration
@@ -51,4 +59,14 @@ urlpatterns = [
     path("kyc/upload-id/", KYCUploadIDCardView.as_view(), name="kyc-upload-id"),
     path("kyc/publish/", KYCPublishView.as_view(), name="kyc-publish"),
     path("kyc/upload-face/", KYCUploadFaceView.as_view(), name="kyc-upload-face"),
+
+    # Invitations
+    path("accept-invite/", AcceptInviteView.as_view(), name="accept-invite"),
+    path("verify-invite-token/", VerifyInviteTokenView.as_view(), name="verify-invite-token"),
+
+    # Admin Management
+    path("admin/kyc/invite/", InviteKYCView.as_view(), name="admin-kyc-invite"),
+    path("admin/kyc/invite/<uuid:id>/resend/", ResendInviteView.as_view(), name="admin-kyc-resend"),
+    path("admin/kyc/", ListKYCView.as_view(), name="admin-kyc-list"),
+    path("admin/kyc/<uuid:id>/", RemoveKYCView.as_view(), name="admin-kyc-remove"),
 ]

@@ -7,51 +7,13 @@ from rest_framework.views import APIView
 
 from app.accounts.models import KYCSubmission, UserAccount
 from app.excrow.models import Escrow
-from .serializers import UserManagementPayloadSerializer, EscrowTransactionsSerializer
+from rest_framework.pagination import PageNumberPagination
+from .serializers import UserManagementUserSerializer
 
-
-class UserManagementView(APIView):
-    permission_classes = [permissions.IsAuthenticated]
-
-    status_labels = {
-        "pending": "Pending",
-        "under_review": "Under Review",
-        "approved": "Approved",
-        "rejected": "Rejected",
-        "not_submitted": "Not Submitted",
-    }
-
-    status_badges = {
-        "pending": "pending",
-        "under_review": "review",
-        "approved": "approved",
-        "rejected": "rejected",
-        "not_submitted": "muted",
-    }
-
-    def get(self, request, *args, **kwargs):
-        if not request.user.is_staff:
-            return Response({"detail": "Staff access required."}, status=status.HTTP_403_FORBIDDEN)
-
-        payload = {
-            "page_title": "User Management",
-            "subtitle": "Manage users and review KYC submissions",
-            "total_users": self.get_queryset().count(),
-            "search_query": request.GET.get("q", "").strip(),
-            "selected_status": request.GET.get("status", "all").strip().lower() or "all",
-            "status_options": [
-                {"value": "all", "label": "All Status"},
-                {"value": "pending", "label": "Pending"},
-                {"value": "under_review", "label": "Under Review"},
-                {"value": "approved", "label": "Approved"},
-                {"value": "rejected", "label": "Rejected"},
-                {"value": "not_submitted", "label": "Not Submitted"},
-            ],
-            "users": self.serialize_users(self.get_queryset()),
-        }
-
-        serializer = UserManagementPayloadSerializer(payload)
-        return Response(serializer.data, status=status.HTTP_200_OK)
+class UserManagementView(generics.ListAPIView):
+    permission_classes = [permissions.IsAdminUser]
+    serializer_class = UserManagementUserSerializer
+    pagination_class = PageNumberPagination
 
     def get_queryset(self):
         latest_kyc_status = Subquery(
@@ -83,35 +45,54 @@ class UserManagementView(APIView):
 
         return queryset
 
-    def serialize_users(self, queryset):
-        users = []
-        for user in queryset:
-            status_value = getattr(user, "annotated_kyc_status", "not_submitted")
-            users.append(
-                {
-                    "id": str(user.id),
-                    "full_name": user.full_name or user.username or user.email,
-                    "email": user.email,
-                    "kyc_status": status_value,
-                    "kyc_label": self.status_labels.get(status_value, status_value.replace("_", " ").title()),
-                    "badge_class": self.status_badges.get(status_value, "muted"),
-                    "transaction_count": getattr(user, "transaction_count", 0),
-                }
-            )
-        return users
 
 
-class EscrowTransactionsView(APIView):
+class EscrowTransactionsView(generics.ListAPIView):
     permission_classes = [permissions.IsAdminUser]
+    serializer_class = __import__('app.administration.serializers', fromlist=['EscrowTransactionsSerializer']).EscrowTransactionsSerializer
+    pagination_class = PageNumberPagination
 
-    def get(self, request):
-        escrows = Escrow.objects.all()
-        escrow_serializer = EscrowTransactionsSerializer(data=escrows, many=True)
-        return Response(
-            escrow_serializer.data,
-            status=status.HTTP_200_OK
-        )
-        pass
+    def get_queryset(self):
+        return Escrow.objects.select_related('created_by', 'receiver').all()
+
+    def list(self, request, *args, **kwargs):
+        queryset = self.filter_queryset(self.get_queryset())
+        
+        # Calculate stats for the dashboard
+        total_transactions = Escrow.objects.count()
+        
+        active_statuses = [
+            Escrow.Status.IN_PROGRESS, 
+            Escrow.Status.FUNDED, 
+            Escrow.Status.ACCEPTED, 
+            Escrow.Status.SHIPPED, 
+            Escrow.Status.UNDER_REVIEW
+        ]
+        active_transactions = Escrow.objects.filter(status__in=active_statuses).count()
+        
+        in_dispute = Escrow.objects.filter(status=Escrow.Status.ISSUE_RAISED).count()
+        completed = Escrow.objects.filter(status=Escrow.Status.COMPLETED).count()
+
+        stats = {
+            'total_transactions': total_transactions,
+            'active_transactions': active_transactions,
+            'in_dispute': in_dispute,
+            'completed': completed,
+        }
+
+        page = self.paginate_queryset(queryset)
+        if page is not None:
+            serializer = self.get_serializer(page, many=True)
+            response = self.get_paginated_response(serializer.data)
+            # Inject stats into the paginated response
+            response.data['stats'] = stats
+            return response
+
+        serializer = self.get_serializer(queryset, many=True)
+        return Response({
+            'stats': stats,
+            'results': serializer.data
+        })
 
 
 class KYCSubmissionListView(generics.ListAPIView):
