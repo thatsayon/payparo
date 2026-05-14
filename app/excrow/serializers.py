@@ -171,11 +171,12 @@ class EscrowCreateSerializer(serializers.Serializer):
         payment_option = validated_data["payment_option"]
 
         # Calculate Fee and Total Amount
+        from decimal import Decimal
         fee_config = FeeConfiguration.objects.first()
-        escrow_fee = fee_config.escrow_fee if fee_config else 0.00
+        escrow_fee = fee_config.escrow_fee if fee_config and fee_config.escrow_fee is not None else Decimal("0.00")
         
         # NOTE: escrow_fee is a fixed amount (or assumed as such based on model DecimalField max_digits=6, decimal_places=2)
-        fee_amount = escrow_fee
+        fee_amount = Decimal(str(escrow_fee))
 
         if payment_option == Escrow.PaymentOption.SINGLE:
             total_amount = price + fee_amount if price else None
