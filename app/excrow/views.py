@@ -79,6 +79,7 @@ class EscrowListCreateView(APIView):
         }, status=status.HTTP_200_OK)
 
     def post(self, request):
+        print(request.data)
         # Build a mutable dict from the non-file fields only (avoids deepcopy of BufferedRandom file objects)
         from django.http import QueryDict
         data = QueryDict('', mutable=True)
