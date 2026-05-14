@@ -93,11 +93,11 @@ class EscrowCreateSerializer(serializers.Serializer):
         help_text="List of installment amounts. Required when payment_option=installment.",
     )
 
-    # Required: minimum 3 product images
+    # Required only for product: minimum 3 product images
     images = serializers.ListField(
         child=serializers.ImageField(),
-        min_length=MIN_IMAGES,
-        help_text=f"Minimum {MIN_IMAGES} product images required.",
+        required=False,
+        help_text=f"Minimum {MIN_IMAGES} product images required for products.",
     )
 
     # Optional: multiple documents
@@ -156,13 +156,23 @@ class EscrowCreateSerializer(serializers.Serializer):
                 )
             data["price"] = None  # no single price
 
+        # Item type specific validation: Images required for Product
+        item_type = data.get("item_type", Escrow.ItemType.PRODUCT)
+        images = data.get("images", [])
+        
+        if item_type == Escrow.ItemType.PRODUCT:
+            if not images or len(images) < MIN_IMAGES:
+                raise serializers.ValidationError(
+                    {"images": f"At least {MIN_IMAGES} images are required for product type escrows."}
+                )
+
         return data
 
     @transaction.atomic
     def create(self, validated_data):
         creator       = self.context["request"].user
         receiver      = validated_data.pop("receiver")
-        images        = validated_data.pop("images")
+        images        = validated_data.pop("images", [])
         documents     = validated_data.pop("documents", [])
         installments  = validated_data.pop("installments", [])
         validated_data.pop("receiver_username")
