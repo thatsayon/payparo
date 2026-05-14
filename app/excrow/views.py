@@ -6,7 +6,13 @@ from rest_framework.parsers import MultiPartParser, FormParser
 from django.db.models import Q
 from django.contrib.auth import get_user_model
 
-from .models import Escrow
+from .models import (
+    Escrow, 
+    EscrowImage, 
+    EscrowDocument, 
+    EscrowInstallment, 
+    EscrowStatusHistory
+)
 from .serializers import (
     EscrowCreateSerializer,
     EscrowListSerializer,
@@ -80,22 +86,50 @@ class EscrowListCreateView(APIView):
 
     def post(self, request):
         print(request.data)
-        # Build a mutable dict from the non-file fields only (avoids deepcopy of BufferedRandom file objects)
-        from django.http import QueryDict
-        data = QueryDict('', mutable=True)
-        for key in request.data.keys():
-            data.setlist(key, request.data.getlist(key))
+        data = request.data
+        
+        # 1. Required fields validation
+        required_fields = ['role', 'item_type', 'product_name', 'description', 'payment_option', 'price', 'fee_amount']
+        
+        missing = []
+        for field in required_fields:
+            if not data.get(field):
+                missing.append(field)
+                
+        receiver_username = data.get('receiver_username') or data.get('receiver')
+        if not receiver_username:
+            missing.append('receiver')
+            
+        total_amount = data.get('total_amount') or data.get('total_amout')
+        if not total_amount:
+            missing.append('total_amout')
+            
+        if missing:
+            return Response({"error": f"The following fields are required: {', '.join(missing)}"}, status=status.HTTP_400_BAD_REQUEST)
+            
+        # 2. Get receiver user
+        receiver_username = receiver_username.strip()
+        if receiver_username.startswith("@"):
+            receiver_username = receiver_username[1:]
+            
+        try:
+            receiver = User.objects.get(username=receiver_username, is_active=True)
+        except User.DoesNotExist:
+            return Response({"error": "No active user found with this username."}, status=status.HTTP_400_BAD_REQUEST)
 
-        # Helper to extract list from QueryDict for cases like field[], field[0], etc.
-        def extract_list(field_name, source, is_file=False):
+        if receiver == request.user:
+            return Response({"error": "You cannot create an escrow with yourself."}, status=status.HTTP_400_BAD_REQUEST)
+
+        # 3. Create Escrow object
+        from django.db import transaction
+        
+        def extract_list(field_name, source):
             if hasattr(source, "getlist"):
                 val = source.getlist(field_name) or source.getlist(f"{field_name}[]")
             else:
                 val = source.get(field_name) or source.get(f"{field_name}[]")
                 if val and not isinstance(val, list):
                     val = [val]
-
-            # Special case for Singular (image, document)
             if not val:
                 singular = field_name[:-1] if field_name.endswith('s') else field_name
                 if hasattr(source, "getlist"):
@@ -103,56 +137,67 @@ class EscrowListCreateView(APIView):
                 else:
                     s_val = source.get(singular)
                     val = [s_val] if s_val and not isinstance(s_val, list) else s_val
-
-            # Fallback for indexed forms (images[0], images[1], etc)
             if not val:
-                # Need to check keys
                 keys = sorted([k for k in source.keys() if k.startswith(f"{field_name}[")])
                 if keys:
                     val = [source[k] for k in keys]
             return val or []
 
-        images = extract_list("images", request.FILES, is_file=True)
-        if images:
-            if hasattr(data, "setlist"):
-                data.setlist("images", images)
-            else:
-                data["images"] = images
-                
-        documents = extract_list("documents", request.FILES, is_file=True)
-        if documents:
-            if hasattr(data, "setlist"):
-                data.setlist("documents", documents)
-            else:
-                data["documents"] = documents
-
+        images = extract_list("images", request.FILES)
+        documents = extract_list("documents", request.FILES)
         installments = extract_list("installments", request.data)
+        
         if installments and len(installments) == 1 and isinstance(installments[0], str) and installments[0].startswith('['):
-            # Try to parse stringified JSON array which is common in Postman
             import json
             try:
                 installments = json.loads(installments[0])
             except ValueError:
                 pass
                 
-        if installments:
-            if hasattr(data, "setlist"):
-                data.setlist("installments", [str(i) for i in installments])
-            else:
-                data["installments"] = [str(i) for i in installments]
-
-        serializer = EscrowCreateSerializer(
-            data=data,
-            context={"request": request},
-        )
-
-        if not serializer.is_valid():
-            return Response(
-                {"error": _first_error(serializer)},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        escrow = serializer.save()
+        if data.get('item_type') == Escrow.ItemType.PRODUCT:
+            if not images or len(images) < 3:
+                return Response({"error": "At least 3 images are required for product type escrows."}, status=status.HTTP_400_BAD_REQUEST)
+                
+        if data.get('payment_option') == Escrow.PaymentOption.INSTALLMENT:
+            if not installments:
+                return Response({"error": "At least one installment amount is required for Custom Installments."}, status=status.HTTP_400_BAD_REQUEST)
+                
+        try:
+            with transaction.atomic():
+                escrow = Escrow.objects.create(
+                    created_by=request.user,
+                    receiver=receiver,
+                    role=data.get('role'),
+                    item_type=data.get('item_type'),
+                    product_name=data.get('product_name'),
+                    description=data.get('description'),
+                    payment_option=data.get('payment_option'),
+                    price=data.get('price'),
+                    fee_amount=data.get('fee_amount'),
+                    total_amount=total_amount,
+                    currency=data.get('currency', 'USD')
+                )
+                
+                if images:
+                    EscrowImage.objects.bulk_create([
+                        EscrowImage(escrow=escrow, image=img)
+                        for img in images
+                    ])
+                    
+                if documents:
+                    EscrowDocument.objects.bulk_create([
+                        EscrowDocument(escrow=escrow, file=doc)
+                        for doc in documents
+                    ])
+                    
+                if installments:
+                    EscrowInstallment.objects.bulk_create([
+                        EscrowInstallment(escrow=escrow, amount=amount, order=i + 1)
+                        for i, amount in enumerate(installments)
+                    ])
+                    
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
         return Response(
             {
