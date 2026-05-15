@@ -241,11 +241,13 @@ class EscrowListSerializer(serializers.ModelSerializer):
     created_by = ReceiverSerializer(read_only=True)
     receiver   = ReceiverSerializer(read_only=True)
     cover_image = serializers.SerializerMethodField()
+    user_role = serializers.SerializerMethodField()
+    is_creator = serializers.SerializerMethodField()
 
     class Meta:
         model  = Escrow
         fields = [
-            "id", "order_id", "product_name", "role", "item_type",
+            "id", "order_id", "product_name", "role", "user_role", "is_creator", "item_type",
             "payment_option", "price", "fee_amount", "total_amount", "currency", "status",
             "created_by", "receiver", "cover_image", "created_at",
         ]
@@ -253,6 +255,24 @@ class EscrowListSerializer(serializers.ModelSerializer):
     def get_cover_image(self, obj):
         first = obj.images.first()
         return first.image.url if first else None
+
+    def get_user_role(self, obj):
+        request = self.context.get("request")
+        if not request or not request.user.is_authenticated:
+            return None
+        
+        user = request.user
+        if obj.created_by_id == user.id:
+            return obj.role
+        elif obj.receiver_id == user.id:
+            return Escrow.Role.BUYER if obj.role == Escrow.Role.SELLER else Escrow.Role.SELLER
+        return None
+
+    def get_is_creator(self, obj):
+        request = self.context.get("request")
+        if not request or not request.user.is_authenticated:
+            return False
+        return obj.created_by_id == request.user.id
 
 
 class EscrowDetailSerializer(serializers.ModelSerializer):
@@ -263,16 +283,36 @@ class EscrowDetailSerializer(serializers.ModelSerializer):
     documents    = EscrowDocumentSerializer(many=True, read_only=True)
     installments = EscrowInstallmentSerializer(many=True, read_only=True)
     status_history = EscrowStatusHistorySerializer(many=True, read_only=True)
+    user_role = serializers.SerializerMethodField()
+    is_creator = serializers.SerializerMethodField()
 
     class Meta:
         model  = Escrow
         fields = [
-            "id", "order_id", "product_name", "role", "item_type",
+            "id", "order_id", "product_name", "role", "user_role", "is_creator", "item_type",
             "payment_option", "price", "fee_amount", "total_amount", "currency", "status",
             "description", "created_by", "receiver",
             "images", "documents", "installments", "status_history",
             "created_at", "updated_at",
         ]
+
+    def get_user_role(self, obj):
+        request = self.context.get("request")
+        if not request or not request.user.is_authenticated:
+            return None
+        
+        user = request.user
+        if obj.created_by_id == user.id:
+            return obj.role
+        elif obj.receiver_id == user.id:
+            return Escrow.Role.BUYER if obj.role == Escrow.Role.SELLER else Escrow.Role.SELLER
+        return None
+
+    def get_is_creator(self, obj):
+        request = self.context.get("request")
+        if not request or not request.user.is_authenticated:
+            return False
+        return obj.created_by_id == request.user.id
 
 
 class OrderHistorySerializer(serializers.ModelSerializer):
