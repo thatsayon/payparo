@@ -418,8 +418,10 @@ class OrderHistoryDetailSerializer(serializers.ModelSerializer):
 
         actions = []
 
-        # ── RECEIVER (second party) ────────────────────────────────
-        # The receiver always sees Accept first (only relevant at CREATED)
+        # ── RECEIVER (invited party) ───────────────────────────────
+        # The receiver always sees Accept first at CREATED status.
+        # This is true regardless of whether the receiver is the seller or buyer,
+        # because the creator initiates the escrow and the other party must accept.
         if user.id == obj.receiver_id:
             if s == Escrow.Status.CREATED:
                 actions.append({
@@ -430,8 +432,12 @@ class OrderHistoryDetailSerializer(serializers.ModelSerializer):
                 })
 
         # ── SELLER PARTY ───────────────────────────────────────────
+        # The seller sends the product after the escrow is accepted.
+        # If the seller is also the receiver (creator is buyer), they see Accept
+        # above at CREATED, so we only show send_product from ACCEPTED onward.
         if user.id == seller_user_id:
-            if s == Escrow.Status.CREATED:
+            if s == Escrow.Status.CREATED and user.id != obj.receiver_id:
+                # Creator is the seller — show disabled send_product while waiting for buyer to accept
                 actions.append({
                     "action":  "send_product",
                     "label":   "Send Product",
