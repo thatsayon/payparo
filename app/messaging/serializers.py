@@ -1,6 +1,7 @@
 from rest_framework import serializers
 from django.contrib.auth import get_user_model
 from app.messaging.models import Conversation, Message, Block, Report
+import cloudinary
 
 User = get_user_model()
 
@@ -12,6 +13,7 @@ class UserSimpleSerializer(serializers.ModelSerializer):
 class MessageSerializer(serializers.ModelSerializer):
     sender_info = UserSimpleSerializer(source='sender', read_only=True)
     reply_to_info = serializers.SerializerMethodField()
+    image = serializers.SerializerMethodField()
 
     class Meta:
         model = Message
@@ -22,12 +24,28 @@ class MessageSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ['sender', 'is_read', 'created_at', 'updated_at']
 
+    def get_image(self, obj):
+        if not obj.image:
+            return None
+        try:
+            # CloudinaryField stores the public_id; build a full URL from it
+            return cloudinary.CloudinaryImage(str(obj.image)).build_url(secure=True)
+        except Exception:
+            return str(obj.image)  # fallback: return raw value
+
     def get_reply_to_info(self, obj):
         if obj.reply_to:
+            # Also fix image URL in reply_to_info
+            reply_image = None
+            if obj.reply_to.image:
+                try:
+                    reply_image = cloudinary.CloudinaryImage(str(obj.reply_to.image)).build_url(secure=True)
+                except Exception:
+                    reply_image = str(obj.reply_to.image)
             return {
                 'id': obj.reply_to.id,
                 'body': obj.reply_to.body,
-                'image': obj.reply_to.image.url if obj.reply_to.image else None,
+                'image': reply_image,
                 'sender_id': obj.reply_to.sender_id,
             }
         return None

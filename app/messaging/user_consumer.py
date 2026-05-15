@@ -128,7 +128,7 @@ class UserConsumer(AsyncWebsocketConsumer):
                     {
                         'type': 'read_receipt_broadcast',
                         'message_ids': message_ids,
-                        'reader_id': self.user.id
+                        'reader_id': str(self.user.id)
                     }
                 )
                 
@@ -140,7 +140,7 @@ class UserConsumer(AsyncWebsocketConsumer):
                         {
                             'type': 'read_receipt_broadcast',
                             'message_ids': message_ids,
-                            'reader_id': self.user.id
+                            'reader_id': str(self.user.id)
                         }
                     )
 

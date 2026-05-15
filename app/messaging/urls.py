@@ -4,6 +4,7 @@ from . import views
 urlpatterns = [
     path('conversations/', views.ConversationListCreateView.as_view(), name='conversation-list'),
     path('conversations/<uuid:conversation_id>/messages/', views.MessageListView.as_view(), name='message-list'),
+    path('conversations/<uuid:conversation_id>/read/', views.MarkAsReadView.as_view(), name='mark-as-read'),
     
     path('blocks/', views.BlockedUsersListView.as_view(), name='blocked-list'),
     path('block/', views.BlockUserView.as_view(), name='block-user'),

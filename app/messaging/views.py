@@ -107,3 +107,13 @@ class ImageUploadView(APIView):
             return Response({"image_url": upload_result.get("secure_url")}, status=status.HTTP_201_CREATED)
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+class MarkAsReadView(APIView):
+    permission_classes = [IsAuthenticated]
+    
+    def post(self, request, conversation_id):
+        Message.objects.filter(
+            conversation_id=conversation_id,
+            is_read=False
+        ).exclude(sender=request.user).update(is_read=True)
+        return Response({"message": "Marked as read"}, status=status.HTTP_200_OK)
