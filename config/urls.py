@@ -18,6 +18,9 @@ urlpatterns = [
     # Auth
     path('api/auth/', include('app.accounts.urls')),
 
+    # Messaging
+    path('api/messaging/', include('app.messaging.urls')),
+
     # Escrow
     path('api/escrow/', include('app.excrow.urls')),
 

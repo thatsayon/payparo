@@ -333,6 +333,22 @@ class OrderHistoryDetailView(APIView):
         return Response({"success": True, "detail": serializer.data}, status=status.HTTP_200_OK)
 
 
+class RecentEscrowsView(generics.ListAPIView):
+    """
+    GET — Retrieve the 5 most recent escrows for the authenticated user.
+    Uses the same lightweight serializer as Order History.
+    """
+    permission_classes = [permissions.IsAuthenticated]
+    serializer_class = OrderHistorySerializer
+
+    def get_queryset(self):
+        user = self.request.user
+        queryset = Escrow.objects.filter(
+            Q(created_by=user) | Q(receiver=user)
+        ).select_related("created_by", "receiver").order_by("-created_at")[:5]
+        return queryset
+
+
 class EscrowAcceptView(APIView):
     """
     POST — The receiver (the other party) accepts the Escrow request.

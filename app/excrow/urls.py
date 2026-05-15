@@ -9,6 +9,7 @@ from .views import (
     EscrowSendProductView,
     EscrowDeliveredView,
     DisputeListView,
+    RecentEscrowsView,
 )
 
 urlpatterns = [
@@ -20,5 +21,6 @@ urlpatterns = [
     path("<uuid:pk>/delivered/", EscrowDeliveredView.as_view(), name="escrow-delivered"),
     path("order-history/", OrderHistory.as_view(), name="order-history"),
     path("order-history/<uuid:pk>/", OrderHistoryDetailView.as_view(), name="order-history-detail"),
+    path("recent/", RecentEscrowsView.as_view(), name="recent-escrows"),
     path("disputes/", DisputeListView.as_view(), name="escrow-disputes"),
 ]

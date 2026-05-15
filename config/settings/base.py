@@ -27,6 +27,7 @@ SECRET_KEY = env("SECRET_KEY")
 # Application definition
 
 INSTALLED_APPS = [
+    'daphne',
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
@@ -42,6 +43,7 @@ INSTALLED_APPS += [
     'corsheaders',
     'django_filters',
     'drf_spectacular',
+    'channels',
 ]
 
 # local apps
@@ -53,6 +55,7 @@ INSTALLED_APPS += [
     'app.profile',
     'app.refer',
     'app.notification',
+    'app.messaging',
 ]
 
 MIDDLEWARE = [
@@ -209,6 +212,16 @@ CLOUDINARY_WEBHOOK_SECRET = env("CLOUDINARY_WEBHOOK_SECRET", default='')
 
 CELERY_BROKER_URL = env("CELERY_BROKER_URL", default="redis://localhost:6379/0")
 CELERY_RESULT_BACKEND = env("CELERY_RESULT_BACKEND", default="redis://localhost:6379/0")
+
+CHANNEL_LAYERS = {
+    "default": {
+        "BACKEND": "channels_redis.core.RedisChannelLayer",
+        "CONFIG": {
+            "hosts": [env("CELERY_BROKER_URL", default="redis://localhost:6379/0")],
+        },
+    },
+}
+
 CELERY_ACCEPT_CONTENT = ['json']
 CELERY_TASK_SERIALIZER = 'json'
 CELERY_RESULT_SERIALIZER = 'json'
@@ -235,4 +248,40 @@ EMAIL_HOST_USER = "no-reply@ovation-app.com"
 EMAIL_HOST_PASSWORD = "OvationAPP123!"
 
 DEFAULT_FROM_EMAIL = "no-reply@ovation-app.com"
+
+
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'formatters': {
+        'verbose': {
+            'format': '[{asctime}] {levelname} {name}: {message}',
+            'style': '{',
+        },
+    },
+    'handlers': {
+        'console': {
+            'class': 'logging.StreamHandler',
+            'formatter': 'verbose',
+        },
+    },
+    'loggers': {
+        'app': {
+            'handlers': ['console'],
+            'level': 'INFO',
+            'propagate': False,
+        },
+        'django.channels': {
+            'handlers': ['console'],
+            'level': 'INFO',
+            'propagate': False,
+        },
+        'daphne': {
+            'handlers': ['console'],
+            'level': 'INFO',
+            'propagate': False,
+        },
+    },
+}
+
 
