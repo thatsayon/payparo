@@ -69,10 +69,12 @@ MIDDLEWARE = [
 
 CORS_ALLOWED_ORIGINS = [
     "https://payparo.tripmate.cloud",
+    "https://api.payparo.com",
 ]
 
 CSRF_TRUSTED_ORIGINS = [
     "https://payparo.tripmate.cloud",
+    "https://api.payparo.com",
 ]
 
 CORS_ALLOW_CREDENTIALS = True
