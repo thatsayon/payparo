@@ -11,7 +11,9 @@ from .models import (
     EscrowImage, 
     EscrowDocument, 
     EscrowInstallment, 
-    EscrowStatusHistory
+    EscrowStatusHistory,
+    EscrowDispute,
+    EscrowDisputeImage
 )
 from .serializers import (
     EscrowCreateSerializer,
@@ -453,8 +455,10 @@ class EscrowDisputeView(APIView):
     POST — The buyer party initiates a dispute.
 
     Allowed when status == DELIVERED  →  transitions to DISPUTE_IN_PROGRESS.
+    Expects multipart/form-data: reason, note, images (multiple)
     """
     permission_classes = [permissions.IsAuthenticated]
+    parser_classes = [MultiPartParser, FormParser]
 
     def post(self, request, pk):
         try:
@@ -475,6 +479,35 @@ class EscrowDisputeView(APIView):
         if escrow.status != Escrow.Status.DELIVERED:
             return Response({"error": f"Dispute can only be initiated when status is 'Delivered'. Current: '{escrow.get_status_display()}'."}, status=status.HTTP_400_BAD_REQUEST)
 
+        reason = request.data.get("reason", "").strip()
+        note = request.data.get("note", "").strip()
+        images = request.FILES.getlist("images")
+
+        if not reason or not note:
+            return Response({"error": "Reason and note are required."}, status=status.HTTP_400_BAD_REQUEST)
+        
+        valid_reasons = [choice[0] for choice in EscrowDispute.ReasonChoices.choices]
+        if reason not in valid_reasons:
+            return Response({"error": f"Invalid reason '{reason}'. Allowed values: {', '.join(valid_reasons)}."}, status=status.HTTP_400_BAD_REQUEST)
+
+        if not images:
+            return Response({"error": "At least one image is required for a dispute."}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Save dispute
+        dispute = EscrowDispute.objects.create(
+            escrow=escrow,
+            raised_by=user,
+            reason=reason,
+            note=note
+        )
+
+        # Save images
+        EscrowDisputeImage.objects.bulk_create([
+            EscrowDisputeImage(dispute=dispute, image=img)
+            for img in images
+        ])
+
+        # Update status
         escrow.status = Escrow.Status.DISPUTE_IN_PROGRESS
         escrow.save()
 

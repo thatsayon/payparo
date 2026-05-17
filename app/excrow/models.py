@@ -236,3 +236,52 @@ class Review(BaseModel):
 
     def __str__(self):
         return f"Review for Escrow #{self.escrow_id} - Rating {self.rating}"
+
+
+class EscrowDispute(BaseModel):
+    """
+    Details of a dispute raised on an escrow transaction.
+    """
+    class ReasonChoices(models.TextChoices):
+        FAKE_PRODUCT = "Fake product", "Fake product"
+        COLOR_NOT_CORRECT = "Color not correct", "Color not correct"
+        BROKEN = "Broken", "Broken"
+        NOT_WORKING = "Not working", "Not working"
+        OTHERS = "Others", "Others"
+
+    escrow = models.OneToOneField(
+        Escrow,
+        on_delete=models.CASCADE,
+        related_name="dispute"
+    )
+    raised_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="raised_disputes"
+    )
+    reason = models.CharField(
+        max_length=50,
+        choices=ReasonChoices.choices,
+    )
+    note = models.TextField()
+
+    def __str__(self):
+        return f"Dispute on Escrow #{self.escrow_id} by {self.raised_by.username}"
+
+
+class EscrowDisputeImage(BaseModel):
+    """
+    Images submitted as evidence for an escrow dispute.
+    """
+    dispute = models.ForeignKey(
+        EscrowDispute,
+        on_delete=models.CASCADE,
+        related_name="images"
+    )
+    image = CloudinaryField()
+
+    class Meta:
+        ordering = ["created_at"]
+
+    def __str__(self):
+        return f"Dispute Image for Escrow #{self.dispute.escrow_id}"
