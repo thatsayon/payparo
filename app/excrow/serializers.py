@@ -315,6 +315,8 @@ class EscrowDetailSerializer(serializers.ModelSerializer):
         return obj.created_by_id == request.user.id
 
 
+
+
 class OrderHistorySerializer(serializers.ModelSerializer):
     user_role = serializers.SerializerMethodField()
     is_creator = serializers.SerializerMethodField()
@@ -347,6 +349,7 @@ class OrderHistorySerializer(serializers.ModelSerializer):
 class OrderHistoryDetailSerializer(serializers.ModelSerializer):
     created_by = ReceiverSerializer(read_only=True)
     receiver   = ReceiverSerializer(read_only=True)
+    images     = EscrowImageSerializer(many=True, read_only=True)
     cover_image = serializers.SerializerMethodField()
     status_history = EscrowStatusHistorySerializer(many=True, read_only=True)
     user_role = serializers.SerializerMethodField()
@@ -357,7 +360,7 @@ class OrderHistoryDetailSerializer(serializers.ModelSerializer):
         model = Escrow
         fields = [
             "id", "order_id", "product_name", "price", 
-            "created_by", "receiver", "cover_image", 
+            "created_by", "receiver", "images", "cover_image", 
             "status", "status_history", "created_at",
             "user_role", "is_creator", "available_actions"
         ]
@@ -454,7 +457,7 @@ class OrderHistoryDetailSerializer(serializers.ModelSerializer):
 
         # ── BUYER PARTY ────────────────────────────────────────────
         if user.id == buyer_user_id:
-            if s == Escrow.Status.CREATED:
+            if s == Escrow.Status.CREATED and user.id != obj.receiver_id:
                 actions.append({
                     "action":  "delivered",
                     "label":   "Mark as Delivered",
@@ -472,6 +475,13 @@ class OrderHistoryDetailSerializer(serializers.ModelSerializer):
                 actions.append({
                     "action":  "delivered",
                     "label":   "Mark as Delivered",
+                    "enabled": True,
+                    "message": None,
+                })
+            elif s == Escrow.Status.DELIVERED:
+                actions.append({
+                    "action":  "dispute",
+                    "label":   "Dispute",
                     "enabled": True,
                     "message": None,
                 })

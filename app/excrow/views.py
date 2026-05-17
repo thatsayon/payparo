@@ -448,6 +448,39 @@ class EscrowDeliveredView(APIView):
         return Response({"success": True, "message": "Delivery confirmed. Status updated to Delivered.", "status": escrow.status}, status=status.HTTP_200_OK)
 
 
+class EscrowDisputeView(APIView):
+    """
+    POST — The buyer party initiates a dispute.
+
+    Allowed when status == DELIVERED  →  transitions to DISPUTE_IN_PROGRESS.
+    """
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request, pk):
+        try:
+            escrow = Escrow.objects.get(pk=pk)
+        except Escrow.DoesNotExist:
+            return Response({"error": "Escrow not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        user = request.user
+        # Determine who is the buyer in this escrow
+        if escrow.role == Escrow.Role.BUYER:
+            buyer_user = escrow.created_by
+        else:
+            buyer_user = escrow.receiver
+
+        if user != buyer_user:
+            return Response({"error": "Only the buyer can initiate a dispute."}, status=status.HTTP_403_FORBIDDEN)
+
+        if escrow.status != Escrow.Status.DELIVERED:
+            return Response({"error": f"Dispute can only be initiated when status is 'Delivered'. Current: '{escrow.get_status_display()}'."}, status=status.HTTP_400_BAD_REQUEST)
+
+        escrow.status = Escrow.Status.DISPUTE_IN_PROGRESS
+        escrow.save()
+
+        return Response({"success": True, "message": "Dispute initiated. Status updated to Dispute In Progress.", "status": escrow.status}, status=status.HTTP_200_OK)
+
+
 # ──────────────────────────────────────────────
 # Dispute / Issue Escrows
 # ──────────────────────────────────────────────
@@ -457,10 +490,11 @@ class DisputeListView(APIView):
     GET — List all escrows connected to the authenticated user that are
     currently in a dispute or resolution state:
 
-      - issue_raised       — a party has raised an issue
-      - under_review       — the dispute is under review
-      - return_in_progress — a return has been initiated
-      - refunded           — a refund has been processed / resolved
+      - issue_raised        — a party has raised an issue
+      - dispute_in_progress — a formal dispute is actively in progress
+      - under_review        — the dispute is under review
+      - return_in_progress  — a return has been initiated
+      - refunded            — a refund has been processed / resolved
 
     The user is considered "connected" if they are either the creator
     (created_by) or the receiver of the escrow.
@@ -473,6 +507,7 @@ class DisputeListView(APIView):
 
     DISPUTE_STATUSES = [
         Escrow.Status.ISSUE_RAISED,
+        Escrow.Status.DISPUTE_IN_PROGRESS,
         Escrow.Status.UNDER_REVIEW,
         Escrow.Status.RETURN_IN_PROGRESS,
         Escrow.Status.REFUNDED,

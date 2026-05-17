@@ -35,6 +35,7 @@ class Escrow(BaseModel):
         DELIVERED          = "delivered",          "Delivered"
         UNDER_REVIEW       = "under_review",       "Under Review"
         ISSUE_RAISED       = "issue_raised",       "Issue Raised"
+        DISPUTE_IN_PROGRESS = "dispute_in_progress", "Dispute In Progress"
         RETURN_IN_PROGRESS = "return_in_progress", "Return In Progress"
         RESOLVED           = "resolved",           "Resolved"
         REFUNDED           = "refunded",           "Refunded"
