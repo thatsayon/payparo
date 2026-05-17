@@ -56,7 +56,9 @@ INSTALLED_APPS += [
     'app.refer',
     'app.notification',
     'app.messaging',
+    'app.ai',
 ]
+
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
@@ -228,6 +230,10 @@ CELERY_RESULT_SERIALIZER = 'json'
 CELERY_TIMEZONE = 'UTC'
 CELERY_TASK_TRACK_STARTED = True
 CELERY_TASK_TIME_LIMIT = 30 * 60
+
+# Google Gemini AI
+GEMINI_API_KEY = env("GEMINI_API_KEY", default="")
+
 
 # STRIPE CONFIGURATION
 STRIPE_PUBLISHABLE_KEY = env("STRIPE_PUBLISHABLE_KEY", default="")

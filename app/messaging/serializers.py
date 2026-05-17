@@ -58,7 +58,7 @@ class ConversationSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Conversation
-        fields = ['id', 'participants', 'created_at', 'updated_at', 'last_message', 'unread_count']
+        fields = ['id', 'participants', 'title', 'is_dispute', 'created_at', 'updated_at', 'last_message', 'unread_count']
 
     def get_last_message(self, obj):
         last_msg = obj.messages.last()

@@ -2,7 +2,7 @@ from rest_framework import serializers
 from django.contrib.auth import get_user_model
 from django.db import transaction
 
-from .models import Escrow, EscrowInstallment, EscrowImage, EscrowDocument, EscrowStatusHistory
+from .models import Escrow, EscrowInstallment, EscrowImage, EscrowDocument, EscrowStatusHistory, EscrowDispute, EscrowDisputeImage
 from app.administration.models import FeeConfiguration
 
 User = get_user_model()
@@ -52,6 +52,28 @@ class ReceiverSerializer(serializers.ModelSerializer):
     class Meta:
         model  = User
         fields = ["id", "email", "username", "full_name"]
+
+
+class EscrowDisputeImageSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = EscrowDisputeImage
+        fields = ["id", "image", "created_at"]
+
+
+class EscrowDisputeSerializer(serializers.ModelSerializer):
+    images = EscrowDisputeImageSerializer(many=True, read_only=True)
+    status_display = serializers.CharField(source='get_status_display', read_only=True)
+    raised_by = ReceiverSerializer(read_only=True)
+
+    class Meta:
+        model = EscrowDispute
+        fields = [
+            "id", "reason", "note", "status", "status_display",
+            "decision_reason", "ai_decision", "ai_confidence", "ai_summary",
+            "seller_response", "seller_response_deadline", "penalty_charged",
+            "raised_by", "created_at", "images",
+        ]
+
 
 
 # ──────────────────────────────────────────────
@@ -283,6 +305,7 @@ class EscrowDetailSerializer(serializers.ModelSerializer):
     documents    = EscrowDocumentSerializer(many=True, read_only=True)
     installments = EscrowInstallmentSerializer(many=True, read_only=True)
     status_history = EscrowStatusHistorySerializer(many=True, read_only=True)
+    dispute = EscrowDisputeSerializer(read_only=True)
     user_role = serializers.SerializerMethodField()
     is_creator = serializers.SerializerMethodField()
 
@@ -292,7 +315,7 @@ class EscrowDetailSerializer(serializers.ModelSerializer):
             "id", "order_id", "product_name", "role", "user_role", "is_creator", "item_type",
             "payment_option", "price", "fee_amount", "total_amount", "currency", "status",
             "description", "created_by", "receiver",
-            "images", "documents", "installments", "status_history",
+            "images", "documents", "installments", "status_history", "dispute",
             "created_at", "updated_at",
         ]
 
@@ -352,6 +375,7 @@ class OrderHistoryDetailSerializer(serializers.ModelSerializer):
     images     = EscrowImageSerializer(many=True, read_only=True)
     cover_image = serializers.SerializerMethodField()
     status_history = EscrowStatusHistorySerializer(many=True, read_only=True)
+    dispute = EscrowDisputeSerializer(read_only=True)
     user_role = serializers.SerializerMethodField()
     is_creator = serializers.SerializerMethodField()
     available_actions = serializers.SerializerMethodField()
@@ -361,7 +385,7 @@ class OrderHistoryDetailSerializer(serializers.ModelSerializer):
         fields = [
             "id", "order_id", "product_name", "price", 
             "created_by", "receiver", "images", "cover_image", 
-            "status", "status_history", "created_at",
+            "status", "status_history", "dispute", "created_at",
             "user_role", "is_creator", "available_actions"
         ]
 

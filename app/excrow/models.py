@@ -248,6 +248,19 @@ class EscrowDispute(BaseModel):
         BROKEN = "Broken", "Broken"
         NOT_WORKING = "Not working", "Not working"
         OTHERS = "Others", "Others"
+        
+    class StatusChoices(models.TextChoices):
+        PENDING_AI          = "pending_ai",          "AI is checking"
+        AWAITING_SELLER     = "awaiting_seller",     "Awaiting Seller Response"
+        PENDING_KYC         = "pending_kyc",         "KYC Resolver checking"
+        ACCEPTED            = "accepted",            "Accepted"
+        DECLINED            = "declined",            "Declined"
+        RESOLVED            = "resolved",            "Resolved"
+
+    class SellerResponseChoices(models.TextChoices):
+        PENDING  = "pending",  "Pending"
+        ACCEPTED = "accepted", "Accepted"
+        REJECTED = "rejected", "Rejected"
 
     escrow = models.OneToOneField(
         Escrow,
@@ -259,11 +272,41 @@ class EscrowDispute(BaseModel):
         on_delete=models.CASCADE,
         related_name="raised_disputes"
     )
+    assigned_to = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        blank=True,
+        null=True,
+        related_name="assigned_disputes"
+    )
     reason = models.CharField(
         max_length=50,
         choices=ReasonChoices.choices,
     )
     note = models.TextField()
+    
+    status = models.CharField(
+        max_length=20,
+        choices=StatusChoices.choices,
+        default=StatusChoices.PENDING_AI
+    )
+    decision_reason = models.TextField(blank=True, null=True)
+
+    # AI analysis results (populated by the Celery task)
+    ai_decision   = models.CharField(max_length=30, blank=True, null=True)
+    ai_confidence = models.FloatField(blank=True, null=True)
+    ai_summary    = models.TextField(blank=True, null=True)
+
+    # Seller response (used when status == awaiting_seller)
+    seller_response = models.CharField(
+        max_length=10,
+        choices=SellerResponseChoices.choices,
+        default=SellerResponseChoices.PENDING,
+    )
+    seller_response_deadline = models.DateTimeField(blank=True, null=True)
+
+    # Penalty: True if seller was charged $10 for escalating and losing
+    penalty_charged = models.BooleanField(default=False)
 
     def __str__(self):
         return f"Dispute on Escrow #{self.escrow_id} by {self.raised_by.username}"

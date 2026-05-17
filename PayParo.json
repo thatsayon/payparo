@@ -1,0 +1,1883 @@
+{
+  "info": {
+    "_postman_id": "aefbcf32-9b7e-40ff-8ddb-e04c8d33ee02",
+    "name": "Payparo",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "_exporter_id": "24845302",
+    "_collection_link": "https://nexduo.postman.co/workspace/JVAI~113a50a6-2c67-402a-916a-e10530df6b56/collection/24845302-aefbcf32-9b7e-40ff-8ddb-e04c8d33ee02?action=share&source=collection_link&creator=24845302"
+  },
+  "item": [
+    {
+      "name": "Admin",
+      "item": [
+        {
+          "name": "KYC Request",
+          "item": [
+            {
+              "name": "KYC Request List",
+              "protocolProfileBehavior": {
+                "disableBodyPruning": true
+              },
+              "request": {
+                "method": "GET",
+                "header": [],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n    \"email\": \"admin@gmail.com\",\n    \"password\": \"admin\"\n}"
+                },
+                "url": {
+                  "raw": "{{baseURL}}/administration/kyc-requests/?q=a@",
+                  "host": [
+                    "{{baseURL}}"
+                  ],
+                  "path": [
+                    "administration",
+                    "kyc-requests",
+                    ""
+                  ],
+                  "query": [
+                    {
+                      "key": "q",
+                      "value": "a@"
+                    }
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "KYC Status Update",
+              "request": {
+                "method": "PATCH",
+                "header": [],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n    \"status\": \"rejected\", //approved\n    \"rejection_reason\": \"abc\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{baseURL}}/administration/kyc-requests/25fa5336-57d7-45e2-9dc9-c08270650574/status/",
+                  "host": [
+                    "{{baseURL}}"
+                  ],
+                  "path": [
+                    "administration",
+                    "kyc-requests",
+                    "25fa5336-57d7-45e2-9dc9-c08270650574",
+                    "status",
+                    ""
+                  ]
+                }
+              },
+              "response": []
+            }
+          ]
+        },
+        {
+          "name": "Users",
+          "protocolProfileBehavior": {
+            "disableBodyPruning": true
+          },
+          "request": {
+            "method": "GET",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"email\": \"baharkhanbd123@gmail.com\",\n    \"password\": \"Bgh321\"\n}"
+            },
+            "url": {
+              "raw": "{{baseURL}}/administration/users/",
+              "host": [
+                "{{baseURL}}"
+              ],
+              "path": [
+                "administration",
+                "users",
+                ""
+              ],
+              "query": [
+                {
+                  "key": "q",
+                  "value": "fasdf",
+                  "disabled": true
+                },
+                {
+                  "key": "status",
+                  "value": "rejected",
+                  "disabled": true
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "KYC Invitation Send",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"email\": \"baharkhan.dev@gmail.com\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseURL}}/api/auth/admin/kyc/invite/",
+              "host": [
+                "{{baseURL}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "admin",
+                "kyc",
+                "invite",
+                ""
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Verify Invite Token",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"token\": \"2a84875a-2943-405f-bf96-92f5e6514df8\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseURL}}/api/auth/verify-invite-token/",
+              "host": [
+                "{{baseURL}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "verify-invite-token",
+                ""
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "KYC Send List",
+          "protocolProfileBehavior": {
+            "disableBodyPruning": true
+          },
+          "request": {
+            "method": "GET",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"email\": \"libro.bangla@gmail.com\",\n    \"password\": \"1fjw0676\"\n}"
+            },
+            "url": {
+              "raw": "{{baseURL}}/api/auth/admin/kyc/",
+              "host": [
+                "{{baseURL}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "admin",
+                "kyc",
+                ""
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "KYC Invitation Resend",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseURL}}/api/auth/admin/kyc/invite/b2e54be2-4d9b-4203-b1c6-0a1eff09333a/resend/",
+              "host": [
+                "{{baseURL}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "admin",
+                "kyc",
+                "invite",
+                "b2e54be2-4d9b-4203-b1c6-0a1eff09333a",
+                "resend",
+                ""
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Excrow List",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseURL}}/administration/escrows/",
+              "host": [
+                "{{baseURL}}"
+              ],
+              "path": [
+                "administration",
+                "escrows",
+                ""
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Excrow Detail",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseURL}}/administration/escrows/01c983c1-433c-4b22-a00c-86a79af7f471/",
+              "host": [
+                "{{baseURL}}"
+              ],
+              "path": [
+                "administration",
+                "escrows",
+                "01c983c1-433c-4b22-a00c-86a79af7f471",
+                ""
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Profile",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseURL}}/administration/profile/",
+              "host": [
+                "{{baseURL}}"
+              ],
+              "path": [
+                "administration",
+                "profile",
+                ""
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Porfile Update",
+          "request": {
+            "method": "PATCH",
+            "header": [],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "name",
+                  "value": "ayon",
+                  "type": "text"
+                },
+                {
+                  "key": "profile_pic",
+                  "type": "file",
+                  "src": "postman-cloud:///1f0e371b-a6cd-46b0-b8b7-786b197df4d6"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseURL}}/administration/profile/update/",
+              "host": [
+                "{{baseURL}}"
+              ],
+              "path": [
+                "administration",
+                "profile",
+                "update",
+                ""
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Profile Security",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"current_password\": \"admin\",\n    \"new_password\": \"1fjw0676\",\n    \"confirm_password\": \"1fjw0676\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseURL}}/administration/profile/password/",
+              "host": [
+                "{{baseURL}}"
+              ],
+              "path": [
+                "administration",
+                "profile",
+                "password",
+                ""
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Auth",
+      "item": [
+        {
+          "name": "KYC",
+          "item": [
+            {
+              "name": "Face Image Upload",
+              "request": {
+                "method": "POST",
+                "header": [],
+                "body": {
+                  "mode": "formdata",
+                  "formdata": [
+                    {
+                      "key": "front_face",
+                      "type": "file",
+                      "src": "postman-cloud:///1f0e371b-a6cd-46b0-b8b7-786b197df4d6"
+                    },
+                    {
+                      "key": "left_face",
+                      "type": "file",
+                      "src": "postman-cloud:///1f0b11e1-254d-44d0-a501-0b2279528b82"
+                    },
+                    {
+                      "key": "right_face",
+                      "type": "file",
+                      "src": "postman-cloud:///1f0e371b-a6cd-46b0-b8b7-786b197df4d6"
+                    }
+                  ]
+                },
+                "url": {
+                  "raw": "{{baseURL}}/api/auth/kyc/upload-face/",
+                  "host": [
+                    "{{baseURL}}"
+                  ],
+                  "path": [
+                    "api",
+                    "auth",
+                    "kyc",
+                    "upload-face",
+                    ""
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "ID Card Image Upload",
+              "request": {
+                "method": "POST",
+                "header": [],
+                "body": {
+                  "mode": "formdata",
+                  "formdata": [
+                    {
+                      "key": "id_front",
+                      "type": "file",
+                      "src": "/home/thatsayon/Downloads/t1.jpeg"
+                    },
+                    {
+                      "key": "id_back",
+                      "type": "file",
+                      "src": "/home/thatsayon/Downloads/canada_nid_2.png"
+                    }
+                  ]
+                },
+                "url": {
+                  "raw": "{{baseURL}}/api/auth/kyc/upload-id/",
+                  "host": [
+                    "{{baseURL}}"
+                  ],
+                  "path": [
+                    "api",
+                    "auth",
+                    "kyc",
+                    "upload-id",
+                    ""
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "ID Info Publish",
+              "request": {
+                "method": "POST",
+                "header": [],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n    \"id_number\": \"123\",\n    \"full_name\": \"Ts \\\"Cris\\\"Registru\\\"\",\n    \"father_name\": \"abc\",\n    \"mother_name\": \"fdadf\",\n    \"date_of_birth\": \"2004-02-8\",\n    \"present_address\": \"fsadf\",\n    \"permanent_address\": \"asdf\",\n    \"gender\": \"fasdf\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{baseURL}}/api/auth/kyc/publish/",
+                  "host": [
+                    "{{baseURL}}"
+                  ],
+                  "path": [
+                    "api",
+                    "auth",
+                    "kyc",
+                    "publish",
+                    ""
+                  ]
+                }
+              },
+              "response": []
+            }
+          ]
+        },
+        {
+          "name": "Login",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"email\": \"ashiqulislamayon28@gmail.com\",\n    \"password\": \"1fjw0676\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseURL}}/api/auth/login/",
+              "host": [
+                "{{baseURL}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "login",
+                ""
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Login 2 FA Verify",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"two_factor_token\": \"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoiZmRhZmVkMzItODNlNS00OGVlLThkMDItYmFiYTllYTI2Yzg3IiwicHVycG9zZSI6IjJmYV9sb2dpbiIsImV4cCI6MTc3MzM1NTg5NCwiaWF0IjoxNzczMzU1Mjk0fQ.xq0EmHqkITMC2da1U2-1tUrybLT1csGFR7LpBAtYw2Y\",\n    \"otp\": \"663364\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseURL}}/api/auth/login/2fa/verify/",
+              "host": [
+                "{{baseURL}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "login",
+                "2fa",
+                "verify",
+                ""
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Register",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"email\": \"baharkhanbd123@gmail.com\",\n    \"password\": \"Bgh321\",\n    \"password_confirm\": \"Bgh321\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseURL}}/api/auth/register/",
+              "host": [
+                "{{baseURL}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "register",
+                ""
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Register Token Verify",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"verificationToken\": \"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoiMiIsInB1cnBvc2UiOiJ2ZXJpZnkiLCJleHAiOjE3NzI0ODM4NzQsImlhdCI6MTc3MjQ4MzI3NH0.9wEg8Du3GvF3I_sOFg8r7GcayihRdlYoZQIMFd2KZ_c\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseURL}}/api/auth/verify-token/",
+              "host": [
+                "{{baseURL}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "verify-token",
+                ""
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Register OTP Verify",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"otp\": \"733782\",\n    \"verificationToken\": \"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoiNWU5ZTJhYTItMWMxNy00NzE3LWJkMTEtN2M4ODFjODg0NjZjIiwicHVycG9zZSI6InZlcmlmeSIsImV4cCI6MTc3MzM0NTk1NywiaWF0IjoxNzczMzQ1MzU3fQ.5uz4HM_hrBqPaJXAWUE1Iv586SoIJbfXRgzBNOTunSE\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseURL}}/api/auth/verify-otp/",
+              "host": [
+                "{{baseURL}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "verify-otp",
+                ""
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Resend OTP",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"verificationToken\": \"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoiNSIsInB1cnBvc2UiOiJ2ZXJpZnkiLCJleHAiOjE3NzI0OTY1NTUsImlhdCI6MTc3MjQ5NTk1NX0.JNZImjeBBstgLnb4E7JOtyUdmx6rL6vX7D1OrqU4F9s\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseURL}}/api/auth/resend-otp/",
+              "host": [
+                "{{baseURL}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "resend-otp",
+                ""
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Forgot Password",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"email\": \"baharkhan.dev@gmail.com\"\n     \n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseURL}}api/auth/forgot-password/",
+              "host": [
+                "{{baseURL}}api"
+              ],
+              "path": [
+                "auth",
+                "forgot-password",
+                ""
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Forgot Token Verify",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"passResetToken\": \"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoiNCIsInB1cnBvc2UiOiJyZXNldCIsImV4cCI6MTc3MjQ5Njg5MywiaWF0IjoxNzcyNDk2MjkzfQ.mjgi4XEWlDNtnp7radsOBo3u8aDcQ1P3_QIMntuyYC8\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseURL}}/api/auth/verify-token/",
+              "host": [
+                "{{baseURL}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "verify-token",
+                ""
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Forgot Password Resend OTP",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"passResetToken\": \"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoiNCIsInB1cnBvc2UiOiJyZXNldCIsImV4cCI6MTc3MjQ5NzQxMCwiaWF0IjoxNzcyNDk2ODEwfQ.gPoK83ZVVqEHKCvC7RU-Yy1Xqz3V9bNxk1q7qgyI0JI\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseURL}}/api/auth/forgot-password/resend-otp/",
+              "host": [
+                "{{baseURL}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "forgot-password",
+                "resend-otp",
+                ""
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Forgot Password OTP Verify",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"otp\": \"604864\",\n    \"passResetToken\": \"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoiNCIsInB1cnBvc2UiOiJyZXNldCIsImV4cCI6MTc3MjQ5Njg5MywiaWF0IjoxNzcyNDk2MjkzfQ.mjgi4XEWlDNtnp7radsOBo3u8aDcQ1P3_QIMntuyYC8\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseURL}}/api/auth/forgot-password/verify-otp/",
+              "host": [
+                "{{baseURL}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "forgot-password",
+                "verify-otp",
+                ""
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Forgot Password Set",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"passwordResetVerified\": \"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoiNCIsInB1cnBvc2UiOiJyZXNldF92ZXJpZmllZCIsImV4cCI6MTc3MjQ5NzEzMiwiaWF0IjoxNzcyNDk2NTMyfQ.1rqqo5vRcVn8e1M3eL3b13BroTbZcKOiKJ2x5TuWMGs\",\n    \"new_password\": \"aaaaaa\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseURL}}/api/auth/forgot-password/set/",
+              "host": [
+                "{{baseURL}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "forgot-password",
+                "set",
+                ""
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Password Set Token Verify",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"passwordResetVerified\": \"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoiNCIsInB1cnBvc2UiOiJyZXNldF92ZXJpZmllZCIsImV4cCI6MTc3MjQ5NzEzMiwiaWF0IjoxNzcyNDk2NTMyfQ.1rqqo5vRcVn8e1M3eL3b13BroTbZcKOiKJ2x5TuWMGs\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseURL}}/api/auth/verify-token/",
+              "host": [
+                "{{baseURL}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "verify-token",
+                ""
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Refresh",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"refresh\": \"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoicmVmcmVzaCIsImV4cCI6MTc3MjU4MzM1MiwiaWF0IjoxNzcyNDk2OTUyLCJqdGkiOiJmZjU5OWJmYjFjYWQ0NjExODM0NzFiNmExODkxNmZmNiIsInVzZXJfaWQiOiI0In0.Rwdw4nFTXIxjV1v_SdxG8ENL7nEgmGHeGlwX9WjCzL4\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseURL}}/api/auth/refresh/",
+              "host": [
+                "{{baseURL}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "refresh",
+                ""
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Logout",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"refresh\": \"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoicmVmcmVzaCIsImV4cCI6MTc3MjU4MjU5MSwiaWF0IjoxNzcyNDk2MTkxLCJqdGkiOiJhOGUyY2E5ZjdkOGY0M2RmYmNiN2FmNTc3YjE3NTIyOCIsInVzZXJfaWQiOiI0In0.r1SHXGzgJhGr9cZVeTHK3UIGrmgg8zoiP3ItTNbz7lU\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseURL}}/api/auth/logout/",
+              "host": [
+                "{{baseURL}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "logout",
+                ""
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "2 FA Toggle",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"enable\": \"true\", // to turn it of use this field only with false value\n    \"method\": \"email\" // email / sms / both\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseURL}}/api/auth/settings/2fa/toggle/",
+              "host": [
+                "{{baseURL}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "settings",
+                "2fa",
+                "toggle",
+                ""
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "2 FA Toggle",
+          "protocolProfileBehavior": {
+            "disableBodyPruning": true
+          },
+          "request": {
+            "method": "GET",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseURL}}/api/auth/settings/2fa/toggle/",
+              "host": [
+                "{{baseURL}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "settings",
+                "2fa",
+                "toggle",
+                ""
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Escrow",
+      "item": [
+        {
+          "name": "Create Escrow",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "receiver_username",
+                  "value": "admin",
+                  "type": "text"
+                },
+                {
+                  "key": "product_name",
+                  "value": "abc",
+                  "type": "text"
+                },
+                {
+                  "key": "description",
+                  "value": "abc",
+                  "type": "text"
+                },
+                {
+                  "key": "images",
+                  "type": "file",
+                  "src": [
+                    "/home/thatsayon/Downloads/t2.jpeg",
+                    "/home/thatsayon/Downloads/2id.webp",
+                    "/home/thatsayon/Downloads/t1.jpeg"
+                  ]
+                },
+                {
+                  "key": "payment_option",
+                  "value": "installment",
+                  "type": "text"
+                },
+                {
+                  "key": "price",
+                  "value": "123",
+                  "type": "text",
+                  "disabled": true
+                },
+                {
+                  "key": "installments",
+                  "value": "[50, 100, 75.50]",
+                  "type": "text"
+                },
+                {
+                  "key": "documents",
+                  "type": "file",
+                  "src": [
+                    "/home/thatsayon/Downloads/GAC-AMC-npic-ncip-en.pdf",
+                    "/home/thatsayon/Documents/PRESCRIPCIONES TECNICAS SEGURIDAD 2026.pdf"
+                  ]
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseURL}}/api/escrow/",
+              "host": [
+                "{{baseURL}}"
+              ],
+              "path": [
+                "api",
+                "escrow",
+                ""
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Find User",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseURL}}/api/escrow/search/?q=a",
+              "host": [
+                "{{baseURL}}"
+              ],
+              "path": [
+                "api",
+                "escrow",
+                "search",
+                ""
+              ],
+              "query": [
+                {
+                  "key": "q",
+                  "value": "a"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Escrow",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseURL}}/api/escrow/",
+              "host": [
+                "{{baseURL}}"
+              ],
+              "path": [
+                "api",
+                "escrow",
+                ""
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Detail Escrow",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseURL}}/api/escrow/438388bf-6667-495d-89ce-ffef7388c79c/",
+              "host": [
+                "{{baseURL}}"
+              ],
+              "path": [
+                "api",
+                "escrow",
+                "438388bf-6667-495d-89ce-ffef7388c79c",
+                ""
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Order History",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseURL}}/api/escrow/order-history/",
+              "host": [
+                "{{baseURL}}"
+              ],
+              "path": [
+                "api",
+                "escrow",
+                "order-history",
+                ""
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Order Detail",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseURL}}/api/escrow/order-history/0d0723a5-e987-4f04-abdc-a8632cf52e60/",
+              "host": [
+                "{{baseURL}}"
+              ],
+              "path": [
+                "api",
+                "escrow",
+                "order-history",
+                "0d0723a5-e987-4f04-abdc-a8632cf52e60",
+                ""
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Order Accept",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseURL}}/api/escrow/0d0723a5-e987-4f04-abdc-a8632cf52e60/accept/",
+              "host": [
+                "{{baseURL}}"
+              ],
+              "path": [
+                "api",
+                "escrow",
+                "0d0723a5-e987-4f04-abdc-a8632cf52e60",
+                "accept",
+                ""
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Dispute List",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseURL}}/api/escrow/disputes/",
+              "host": [
+                "{{baseURL}}"
+              ],
+              "path": [
+                "api",
+                "escrow",
+                "disputes",
+                ""
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "KYC Specialist",
+          "item": [
+            {
+              "name": "Get Unassigned Disputes",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{a_token}}",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseURL}}/api/escrow/disputes/unassigned/?assigned=false",
+                  "host": [
+                    "{{baseURL}}"
+                  ],
+                  "path": [
+                    "api",
+                    "escrow",
+                    "disputes",
+                    "unassigned",
+                    ""
+                  ],
+                  "query": [
+                    {
+                      "key": "assigned",
+                      "value": "false"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "Assign Dispute to Self",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{a_token}}",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseURL}}/api/escrow/disputes/{{dispute_id}}/assign/",
+                  "host": [
+                    "{{baseURL}}"
+                  ],
+                  "path": [
+                    "api",
+                    "escrow",
+                    "disputes",
+                    "{{dispute_id}}",
+                    "assign",
+                    ""
+                  ]
+                }
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Home & Profile",
+      "item": [
+        {
+          "name": "Withdraw",
+          "item": [
+            {
+              "name": "Bank Account Get",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseURL}}/api/profile/banks/",
+                  "host": [
+                    "{{baseURL}}"
+                  ],
+                  "path": [
+                    "api",
+                    "profile",
+                    "banks",
+                    ""
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Bank Account Post",
+              "request": {
+                "method": "POST",
+                "header": [],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n    \"bank_name\": \"brac bank\",\n    \"account_holder_name\": \"Ashiqul Islam\",\n    \"account_number\": \"20303049493092304\",\n    \"routing_number\": \"2323\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{baseURL}}/api/profile/banks/",
+                  "host": [
+                    "{{baseURL}}"
+                  ],
+                  "path": [
+                    "api",
+                    "profile",
+                    "banks",
+                    ""
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Bank Account Update",
+              "request": {
+                "method": "PATCH",
+                "header": [],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n    \"bank_name\": \"brac bank\",\n    \"account_holder_name\": \"Ashiqul Islam\",\n    \"account_number\": \"20303049493092304\",\n    \"routing_number\": \"2323\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{baseURL}}/api/profile/banks/",
+                  "host": [
+                    "{{baseURL}}"
+                  ],
+                  "path": [
+                    "api",
+                    "profile",
+                    "banks",
+                    ""
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Paypal Account Get",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseURL}}/api/profile/paypal/",
+                  "host": [
+                    "{{baseURL}}"
+                  ],
+                  "path": [
+                    "api",
+                    "profile",
+                    "paypal",
+                    ""
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Paypal Account Post",
+              "request": {
+                "method": "POST",
+                "header": [],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n    \"paypal_email\": \"a@gmail.com\",\n    \"full_name\": \"av\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{baseURL}}/api/profile/paypal/",
+                  "host": [
+                    "{{baseURL}}"
+                  ],
+                  "path": [
+                    "api",
+                    "profile",
+                    "paypal",
+                    ""
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Paypal Account Update",
+              "request": {
+                "method": "PATCH",
+                "header": [],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n    \"paypal_email\": \"a@gmail.com\",\n    \"full_name\": \"av\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{baseURL}}/api/profile/paypal/",
+                  "host": [
+                    "{{baseURL}}"
+                  ],
+                  "path": [
+                    "api",
+                    "profile",
+                    "paypal",
+                    ""
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Withdraw Fee",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseURL}}/api/profile/withdraw/fee/",
+                  "host": [
+                    "{{baseURL}}"
+                  ],
+                  "path": [
+                    "api",
+                    "profile",
+                    "withdraw",
+                    "fee",
+                    ""
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Paypal Withdraw History",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseURL}}/api/profile/withdraw/history/paypal/",
+                  "host": [
+                    "{{baseURL}}"
+                  ],
+                  "path": [
+                    "api",
+                    "profile",
+                    "withdraw",
+                    "history",
+                    "paypal",
+                    ""
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Bank Withdraw History",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseURL}}/api/profile/withdraw/history/bank/",
+                  "host": [
+                    "{{baseURL}}"
+                  ],
+                  "path": [
+                    "api",
+                    "profile",
+                    "withdraw",
+                    "history",
+                    "bank",
+                    ""
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Withdraw Page",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseURL}}/api/profile/wallet/withdraw-page/",
+                  "host": [
+                    "{{baseURL}}"
+                  ],
+                  "path": [
+                    "api",
+                    "profile",
+                    "wallet",
+                    "withdraw-page",
+                    ""
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Withdraw Request",
+              "request": {
+                "method": "POST",
+                "header": [],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n    \"amount\": 12,\n    \"method\": \"bank\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{baseURL}}/api/profile/wallet/withdraw-request/",
+                  "host": [
+                    "{{baseURL}}"
+                  ],
+                  "path": [
+                    "api",
+                    "profile",
+                    "wallet",
+                    "withdraw-request",
+                    ""
+                  ]
+                }
+              },
+              "response": []
+            }
+          ]
+        },
+        {
+          "name": "Profile Home",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseURL}}/api/profile/home/",
+              "host": [
+                "{{baseURL}}"
+              ],
+              "path": [
+                "api",
+                "profile",
+                "home",
+                ""
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Wallet Balance",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseURL}}/api/profile/wallet/balance/",
+              "host": [
+                "{{baseURL}}"
+              ],
+              "path": [
+                "api",
+                "profile",
+                "wallet",
+                "balance",
+                ""
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Add Balance",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"amount\": 10\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseURL}}/api/profile/wallet/add-balance/",
+              "host": [
+                "{{baseURL}}"
+              ],
+              "path": [
+                "api",
+                "profile",
+                "wallet",
+                "add-balance",
+                ""
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Transaction History",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseURL}}/api/profile/wallet/transactions/",
+              "host": [
+                "{{baseURL}}"
+              ],
+              "path": [
+                "api",
+                "profile",
+                "wallet",
+                "transactions",
+                ""
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Wallet Webhook",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseURL}}/api/profile/wallet/webhook/stripe/",
+              "host": [
+                "{{baseURL}}"
+              ],
+              "path": [
+                "api",
+                "profile",
+                "wallet",
+                "webhook",
+                "stripe",
+                ""
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Stripe Fee",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseURL}}/api/profile/wallet/stripe-fee/",
+              "host": [
+                "{{baseURL}}"
+              ],
+              "path": [
+                "api",
+                "profile",
+                "wallet",
+                "stripe-fee",
+                ""
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Add Phone Number",
+          "request": {
+            "method": "PATCH",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"phone_number\": \"3434\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseURL}}/api/profile/phone/",
+              "host": [
+                "{{baseURL}}"
+              ],
+              "path": [
+                "api",
+                "profile",
+                "phone",
+                ""
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Profile Update",
+          "request": {
+            "method": "GET",
+            "header": []
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Refer",
+      "item": [
+        {
+          "name": "Refer Dashboard",
+          "protocolProfileBehavior": {
+            "disableBodyPruning": true
+          },
+          "request": {
+            "method": "GET",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"email\": \"admin@gmail.com\",\n    \"password\": \"admin\"\n}"
+            },
+            "url": {
+              "raw": "{{baseURL}}/api/refer/dashboard/",
+              "host": [
+                "{{baseURL}}"
+              ],
+              "path": [
+                "api",
+                "refer",
+                "dashboard",
+                ""
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "KYC Role",
+      "item": [
+        {
+          "name": "Accept KYC Invitation",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"token\": \"2a84875a-2943-405f-bf96-92f5e6514df8\",\n    \"full_name\": \"Ayon\",\n    \"password\": \"1fjw0676\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseURL}}/api/auth/accept-invite/",
+              "host": [
+                "{{baseURL}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "accept-invite",
+                ""
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Messaging",
+      "item": [
+        {
+          "name": "Conversation List",
+          "protocolProfileBehavior": {
+            "disableBodyPruning": true
+          },
+          "request": {
+            "method": "GET",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"email\": \"libro.bangla@gmail.com\",\n    \"password\": \"1fjw0676\"\n}"
+            },
+            "url": {
+              "raw": "{{baseURL}}/api/messaging/conversations/",
+              "host": [
+                "{{baseURL}}"
+              ],
+              "path": [
+                "api",
+                "messaging",
+                "conversations",
+                ""
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Conversation Detail",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseURL}}/api/messaging/conversations/f77bf882-c053-4f29-9435-0969ddadef18/messages/",
+              "host": [
+                "{{baseURL}}"
+              ],
+              "path": [
+                "api",
+                "messaging",
+                "conversations",
+                "f77bf882-c053-4f29-9435-0969ddadef18",
+                "messages",
+                ""
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    }
+  ],
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{a_token}}",
+        "type": "string"
+      }
+    ]
+  },
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "packages": {},
+        "requests": {},
+        "exec": [
+          ""
+        ]
+      }
+    },
+    {
+      "listen": "test",
+      "script": {
+        "type": "text/javascript",
+        "packages": {},
+        "requests": {},
+        "exec": [
+          ""
+        ]
+      }
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseURL",
+      "value": ""
+    },
+    {
+      "key": "admin_token",
+      "value": ""
+    },
+    {
+      "key": "a_token",
+      "value": ""
+    },
+    {
+      "key": "baseURL",
+      "value": "",
+      "disabled": true
+    }
+  ]
+}

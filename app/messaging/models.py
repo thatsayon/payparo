@@ -7,8 +7,12 @@ User = get_user_model()
 
 class Conversation(BaseModel):
     participants = models.ManyToManyField(User, related_name='conversations')
+    title = models.CharField(max_length=255, blank=True, null=True)
+    is_dispute = models.BooleanField(default=False)
     
     def __str__(self):
+        if self.title:
+            return f"Conversation: {self.title}"
         return f"Conversation {self.id}"
 
 class Message(BaseModel):

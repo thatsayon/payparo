@@ -507,11 +507,22 @@ class EscrowDisputeView(APIView):
             for img in images
         ])
 
-        # Update status
+        # Update escrow status to dispute in progress
         escrow.status = Escrow.Status.DISPUTE_IN_PROGRESS
         escrow.save()
 
-        return Response({"success": True, "message": "Dispute initiated. Status updated to Dispute In Progress.", "status": escrow.status}, status=status.HTTP_200_OK)
+        # Fire Gemini AI analysis in background
+        try:
+            from app.ai.tasks import analyze_dispute
+            analyze_dispute.delay(str(dispute.id))
+        except Exception as exc:
+            import logging
+            logging.getLogger("app").warning(
+                "Could not enqueue analyze_dispute task for %s: %s", dispute.id, exc
+            )
+
+        return Response({"success": True, "message": "Dispute initiated. AI analysis started in background.", "status": escrow.status}, status=status.HTTP_200_OK)
+
 
 
 # ──────────────────────────────────────────────
@@ -599,3 +610,214 @@ class DisputeListView(APIView):
             status=status.HTTP_200_OK,
         )
 
+
+# ──────────────────────────────────────────────
+# Seller responds to AI decision
+# ──────────────────────────────────────────────
+
+class SellerDisputeResponseView(APIView):
+    """
+    POST — Seller accepts or rejects the AI decision.
+    Only valid when dispute.status == 'awaiting_seller'.
+    Body: { "action": "accept" | "reject" }
+    """
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request, pk):
+        try:
+            dispute = EscrowDispute.objects.select_related("escrow").get(pk=pk)
+        except EscrowDispute.DoesNotExist:
+            return Response({"error": "Dispute not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        escrow = dispute.escrow
+        user   = request.user
+        seller = escrow.created_by if escrow.role == Escrow.Role.SELLER else escrow.receiver
+
+        if user != seller:
+            return Response({"error": "Only the seller can respond to this dispute."}, status=status.HTTP_403_FORBIDDEN)
+
+        if dispute.status != EscrowDispute.StatusChoices.AWAITING_SELLER:
+            return Response(
+                {"error": f"Dispute is not awaiting a seller response. Current status: {dispute.status}."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        action = request.data.get("action", "").strip().lower()
+        if action not in ("accept", "reject"):
+            return Response({"error": "action must be 'accept' or 'reject'."}, status=status.HTTP_400_BAD_REQUEST)
+
+        from django.db import transaction as db_transaction
+        with db_transaction.atomic():
+            if action == "accept":
+                dispute.status          = EscrowDispute.StatusChoices.ACCEPTED
+                dispute.seller_response = EscrowDispute.SellerResponseChoices.ACCEPTED
+                dispute.decision_reason = (dispute.decision_reason or "") + "\n\nSeller accepted the AI decision."
+                msg = "Dispute accepted. The buyer's claim has been upheld."
+            else:
+                dispute.status          = EscrowDispute.StatusChoices.PENDING_KYC
+                dispute.seller_response = EscrowDispute.SellerResponseChoices.REJECTED
+                dispute.decision_reason = (dispute.decision_reason or "") + "\n\nSeller rejected the AI decision. Case sent to KYC review."
+                msg = "Escalated to KYC review. If buyer is confirmed correct, a $10 review fee will be charged to the seller."
+            dispute.save()
+
+        return Response({"success": True, "message": msg, "status": dispute.status}, status=status.HTTP_200_OK)
+
+
+# ──────────────────────────────────────────────
+# KYC Resolver finalises a dispute manually
+# ──────────────────────────────────────────────
+
+class KYCDisputeResolveView(APIView):
+    """
+    POST — Staff/KYC resolves a dispute in pending_kyc.
+    Body: { "decision": "buyer_correct" | "seller_correct", "reason": "..." }
+    If buyer_correct AND seller previously rejected AI: charge $10 from seller wallet.
+    """
+    permission_classes = [permissions.IsAdminUser]
+
+    def post(self, request, pk):
+        try:
+            dispute = EscrowDispute.objects.select_related("escrow").get(pk=pk)
+        except EscrowDispute.DoesNotExist:
+            return Response({"error": "Dispute not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        if dispute.status != EscrowDispute.StatusChoices.PENDING_KYC:
+            return Response(
+                {"error": f"Dispute is not in pending_kyc. Current: {dispute.status}."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        decision = request.data.get("decision", "").strip().lower()
+        reason   = request.data.get("reason", "").strip()
+
+        if decision not in ("buyer_correct", "seller_correct"):
+            return Response({"error": "decision must be 'buyer_correct' or 'seller_correct'."}, status=status.HTTP_400_BAD_REQUEST)
+
+        from django.db import transaction as db_transaction
+        penalty_applied = False
+
+        with db_transaction.atomic():
+            if decision == "buyer_correct":
+                dispute.status = EscrowDispute.StatusChoices.ACCEPTED
+                # Charge $10 if seller escalated and lost
+                if dispute.seller_response == EscrowDispute.SellerResponseChoices.REJECTED and not dispute.penalty_charged:
+                    seller = dispute.escrow.created_by if dispute.escrow.role == Escrow.Role.SELLER else dispute.escrow.receiver
+                    try:
+                        from app.profile.models import Wallet
+                        wallet = Wallet.objects.select_for_update().get(user=seller)
+                        wallet.balance = max(0, float(wallet.balance) - 10)
+                        wallet.save()
+                        dispute.penalty_charged = True
+                        penalty_applied = True
+                    except Exception:
+                        pass
+            else:
+                dispute.status = EscrowDispute.StatusChoices.DECLINED
+
+            if reason:
+                dispute.decision_reason = reason
+            dispute.save()
+
+        return Response({
+            "success": True,
+            "status": dispute.status,
+            "penalty_charged": penalty_applied,
+            "message": (
+                f"Dispute resolved: {'buyer wins' if decision == 'buyer_correct' else 'seller wins'}."
+                + (" Seller charged $10 review penalty." if penalty_applied else "")
+            ),
+        }, status=status.HTTP_200_OK)
+
+
+class KYCDisputeListView(APIView):
+    """
+    GET — Fetch disputes for KYC specialist.
+    ?assigned=false to see unassigned, ?assigned=true for mine
+    """
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        if request.user.role not in ("kyc", "admin"):
+            return Response({"error": "Permission denied. KYC or Admin role required."}, status=status.HTTP_403_FORBIDDEN)
+
+        queryset = EscrowDispute.objects.filter(status=EscrowDispute.StatusChoices.PENDING_KYC).select_related("escrow").order_by("-created_at")
+        
+        assigned = request.query_params.get("assigned", "").lower()
+        if assigned == "false":
+            queryset = queryset.filter(assigned_to__isnull=True)
+        elif assigned == "true":
+            queryset = queryset.filter(assigned_to=request.user)
+
+        from rest_framework.pagination import PageNumberPagination
+        paginator = PageNumberPagination()
+        paginated = paginator.paginate_queryset(queryset, request, view=self)
+
+        data = []
+        for d in paginated:
+            data.append({
+                "id": d.id,
+                "escrow_id": d.escrow.id,
+                "order_id": d.escrow.order_id,
+                "product_name": d.escrow.product_name,
+                "reason": d.reason,
+                "created_at": d.created_at,
+                "assigned_to": d.assigned_to.id if d.assigned_to else None,
+            })
+            
+        return Response(
+            {
+                "success": True,
+                "count": paginator.page.paginator.count,
+                "next": paginator.get_next_link(),
+                "previous": paginator.get_previous_link(),
+                "results": data,
+            },
+            status=status.HTTP_200_OK,
+        )
+
+
+class KYCDisputeAssignView(APIView):
+    """
+    POST — Assign dispute to self and create buyer/seller conversations.
+    """
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request, pk):
+        if request.user.role not in ("kyc", "admin"):
+            return Response({"error": "Permission denied. KYC or Admin role required."}, status=status.HTTP_403_FORBIDDEN)
+
+        try:
+            dispute = EscrowDispute.objects.select_related("escrow", "escrow__created_by", "escrow__receiver").get(pk=pk)
+        except EscrowDispute.DoesNotExist:
+            return Response({"error": "Dispute not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        if dispute.status != EscrowDispute.StatusChoices.PENDING_KYC:
+            return Response({"error": "Dispute is not pending KYC review."}, status=status.HTTP_400_BAD_REQUEST)
+        
+        if dispute.assigned_to:
+            if dispute.assigned_to == request.user:
+                return Response({"success": True, "message": "Already assigned to you."})
+            return Response({"error": "Dispute is already assigned to someone else."}, status=status.HTTP_400_BAD_REQUEST)
+
+        from app.messaging.models import Conversation
+        
+        dispute.assigned_to = request.user
+        dispute.save()
+
+        # Create Conversation with Seller
+        seller = dispute.escrow.created_by if dispute.escrow.role == Escrow.Role.SELLER else dispute.escrow.receiver
+        conv_seller = Conversation.objects.create(
+            title=f"Dispute request #{dispute.escrow.order_id} (Seller)",
+            is_dispute=True
+        )
+        conv_seller.participants.add(request.user, seller)
+
+        # Create Conversation with Buyer
+        buyer = dispute.escrow.receiver if dispute.escrow.role == Escrow.Role.SELLER else dispute.escrow.created_by
+        conv_buyer = Conversation.objects.create(
+            title=f"Dispute request #{dispute.escrow.order_id} (Buyer)",
+            is_dispute=True
+        )
+        conv_buyer.participants.add(request.user, buyer)
+
+        return Response({"success": True, "message": "Dispute assigned successfully and conversations created."}, status=status.HTTP_200_OK)
