@@ -12,9 +12,6 @@ from .views import (
     DisputeListView,
     RecentEscrowsView,
     SellerDisputeResponseView,
-    KYCDisputeResolveView,
-    KYCDisputeListView,
-    KYCDisputeAssignView,
 )
 
 urlpatterns = [
@@ -30,7 +27,4 @@ urlpatterns = [
     path("recent/", RecentEscrowsView.as_view(), name="recent-escrows"),
     path("disputes/", DisputeListView.as_view(), name="escrow-disputes"),
     path("disputes/<uuid:pk>/seller-response/", SellerDisputeResponseView.as_view(), name="dispute-seller-response"),
-    path('disputes/unassigned/', KYCDisputeListView.as_view(), name='dispute-list-kyc'),
-    path('disputes/<uuid:pk>/assign/', KYCDisputeAssignView.as_view(), name='dispute-assign-kyc'),
-    path("disputes/<uuid:pk>/kyc-resolve/", KYCDisputeResolveView.as_view(), name="dispute-kyc-resolve"),
 ]

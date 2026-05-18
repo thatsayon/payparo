@@ -1192,22 +1192,16 @@
                   }
                 ],
                 "url": {
-                  "raw": "{{baseURL}}/api/escrow/disputes/unassigned/?assigned=false",
+                  "raw": "{{baseURL}}/api/kyc/disputes/unassigned/",
                   "host": [
                     "{{baseURL}}"
                   ],
                   "path": [
                     "api",
-                    "escrow",
+                    "kyc",
                     "disputes",
                     "unassigned",
                     ""
-                  ],
-                  "query": [
-                    {
-                      "key": "assigned",
-                      "value": "false"
-                    }
                   ]
                 }
               }
@@ -1224,16 +1218,79 @@
                   }
                 ],
                 "url": {
-                  "raw": "{{baseURL}}/api/escrow/disputes/{{dispute_id}}/assign/",
+                  "raw": "{{baseURL}}/api/kyc/disputes/{{dispute_id}}/assign/",
                   "host": [
                     "{{baseURL}}"
                   ],
                   "path": [
                     "api",
-                    "escrow",
+                    "kyc",
                     "disputes",
                     "{{dispute_id}}",
                     "assign",
+                    ""
+                  ]
+                }
+              }
+            },
+            {
+              "name": "Get Assigned Disputes",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{a_token}}",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseURL}}/api/kyc/disputes/assigned/?status=pending_kyc&confidence=0.8",
+                  "host": [
+                    "{{baseURL}}"
+                  ],
+                  "path": [
+                    "api",
+                    "kyc",
+                    "disputes",
+                    "assigned",
+                    ""
+                  ],
+                  "query": [
+                    {
+                      "key": "status",
+                      "value": "pending_kyc"
+                    },
+                    {
+                      "key": "confidence",
+                      "value": "0.8"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "Get Assigned Dispute Detail",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{a_token}}",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseURL}}/api/kyc/disputes/assigned/{{dispute_id}}/",
+                  "host": [
+                    "{{baseURL}}"
+                  ],
+                  "path": [
+                    "api",
+                    "kyc",
+                    "disputes",
+                    "assigned",
+                    "{{dispute_id}}",
                     ""
                   ]
                 }

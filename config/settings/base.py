@@ -57,6 +57,7 @@ INSTALLED_APPS += [
     'app.notification',
     'app.messaging',
     'app.ai',
+    'app.kyc',
 ]
 
 

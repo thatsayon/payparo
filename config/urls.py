@@ -33,6 +33,9 @@ urlpatterns = [
     # AI Dispute Analysis (staff only)
     path('api/ai/', include('app.ai.urls')),
 
+    # KYC
+    path('api/kyc/', include('app.kyc.urls')),
+
     # API Documentation
     path('api/schema/', SpectacularAPIView.as_view(), name='schema'),
     path('api/docs/', SpectacularSwaggerView.as_view(url_name='schema'), name='swagger-ui'),
