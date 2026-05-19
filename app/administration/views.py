@@ -22,6 +22,7 @@ from .serializers import (
     AdminProfilePageSerializer,
     AdminProfileUpdateSerializer,
     AdminPasswordUpdateSerializer,
+    AdminWithdrawRequestListSerializer,
 )
 
 
@@ -345,3 +346,124 @@ class AdminPasswordUpdateView(APIView):
             user.save()
             return Response({"detail": "Password updated successfully."}, status=status.HTTP_200_OK)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+class AdminWithdrawRequestListView(generics.ListAPIView):
+    """
+    GET — List all user withdraw requests (bank and paypal) with search and filters.
+    Only accessible by administrators.
+    """
+    permission_classes = [permissions.IsAdminUser]
+    serializer_class = AdminWithdrawRequestListSerializer
+    pagination_class = PageNumberPagination
+
+    def get_queryset(self):
+        from app.profile.models import WithdrawTransaction
+        queryset = WithdrawTransaction.objects.select_related("user").order_by("-created_at")
+
+        # Status filter
+        status_filter = self.request.query_params.get("status", "").strip().lower()
+        if status_filter:
+            queryset = queryset.filter(status=status_filter)
+
+        # Method filter
+        method_filter = self.request.query_params.get("method", "").strip().lower()
+        if method_filter:
+            queryset = queryset.filter(method=method_filter)
+
+        # Search parameter (username, user email, transaction_ref)
+        search_query = self.request.query_params.get("q", "").strip()
+        if search_query:
+            from django.db.models import Q
+            queryset = queryset.filter(
+                Q(user__full_name__icontains=search_query)
+                | Q(user__email__icontains=search_query)
+                | Q(user__username__icontains=search_query)
+                | Q(transaction_ref__icontains=search_query)
+            )
+
+        return queryset
+
+
+class AdminWithdrawRequestStatusUpdateView(APIView):
+    """
+    PATCH — Approve or Reject a user withdraw request.
+    Only accessible by administrators.
+    """
+    permission_classes = [permissions.IsAdminUser]
+
+    def patch(self, request, pk):
+        from app.profile.models import WithdrawTransaction, Wallet, WalletTransaction
+        from django.db import transaction as db_transaction
+
+        try:
+            withdraw_txn = WithdrawTransaction.objects.select_related("user").get(pk=pk)
+        except WithdrawTransaction.DoesNotExist:
+            return Response({"error": "Withdraw request not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        if withdraw_txn.status != WithdrawTransaction.Status.PENDING:
+            return Response(
+                {"error": f"Withdraw request is not pending. Current status: {withdraw_txn.status}."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        new_status = request.data.get("status", "").strip().lower()
+        rejection_reason = request.data.get("rejection_reason", "").strip()
+
+        if new_status not in ("completed", "failed"):
+            return Response(
+                {"error": "status must be 'completed' or 'failed'."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        with db_transaction.atomic():
+            wallet = Wallet.objects.select_for_update().get(user=withdraw_txn.user)
+
+            if new_status == "completed":
+                withdraw_txn.status = WithdrawTransaction.Status.COMPLETED
+                withdraw_txn.description = "Withdrawal request approved and processed."
+                withdraw_txn.save(update_fields=["status", "description", "updated_at"])
+
+                # Log wallet transaction for withdrawal completion
+                WalletTransaction.objects.create(
+                    wallet=wallet,
+                    transaction_type=WalletTransaction.TransactionType.WITHDRAWAL,
+                    amount=withdraw_txn.amount,
+                    fee=withdraw_txn.fee,
+                    total_charged=withdraw_txn.amount,
+                    status=WalletTransaction.Status.COMPLETED,
+                    description=f"Withdrawal completed: {withdraw_txn.description}",
+                )
+            else:
+                # Rejection/Failure: refund back to wallet atomically
+                wallet.balance += withdraw_txn.amount
+                wallet.save(update_fields=["balance", "updated_at"])
+
+                withdraw_txn.status = WithdrawTransaction.Status.FAILED
+                withdraw_txn.description = f"Withdrawal request rejected. {rejection_reason}".strip()
+                withdraw_txn.save(update_fields=["status", "description", "updated_at"])
+
+                # Log wallet transaction for withdrawal failure
+                WalletTransaction.objects.create(
+                    wallet=wallet,
+                    transaction_type=WalletTransaction.TransactionType.WITHDRAWAL,
+                    amount=withdraw_txn.amount,
+                    fee=withdraw_txn.fee,
+                    total_charged=withdraw_txn.amount,
+                    status=WalletTransaction.Status.FAILED,
+                    description=withdraw_txn.description,
+                )
+
+        return Response(
+            {
+                "success": True,
+                "status": withdraw_txn.status,
+                "description": withdraw_txn.description,
+                "message": (
+                    "Withdrawal request completed successfully."
+                    if new_status == "completed"
+                    else "Withdrawal request rejected and balance refunded."
+                ),
+            },
+            status=status.HTTP_200_OK,
+        )

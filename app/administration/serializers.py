@@ -212,3 +212,32 @@ class AdminProfilePageSerializer(serializers.Serializer):
     profile_photo = AdminProfilePhotoSerializer()
     name = serializers.CharField()
     email = serializers.EmailField()
+
+
+class AdminWithdrawRequestListSerializer(serializers.ModelSerializer):
+    user_email = serializers.EmailField(source="user.email", read_only=True)
+    user_full_name = serializers.CharField(source="user.full_name", read_only=True)
+    status_display = serializers.CharField(source="get_status_display", read_only=True)
+
+    class Meta:
+        from app.profile.models import WithdrawTransaction
+        model = WithdrawTransaction
+        fields = (
+            "id",
+            "user",
+            "user_email",
+            "user_full_name",
+            "method",
+            "amount",
+            "fee",
+            "net_amount",
+            "paypal_email",
+            "bank_name",
+            "account_number_last4",
+            "transaction_ref",
+            "status",
+            "status_display",
+            "description",
+            "created_at",
+        )
+        read_only_fields = fields

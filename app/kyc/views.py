@@ -118,6 +118,22 @@ class KYCAssignedDisputeDetailView(APIView):
 
         escrow = dispute.escrow
 
+        # Get buyer and seller conversation IDs
+        from app.messaging.models import Conversation
+
+        buyer_conv = Conversation.objects.filter(
+            is_dispute=True,
+            title=f"Dispute request #{escrow.order_id} (Buyer)"
+        ).first()
+
+        seller_conv = Conversation.objects.filter(
+            is_dispute=True,
+            title=f"Dispute request #{escrow.order_id} (Seller)"
+        ).first()
+
+        buyer_conversation_id = str(buyer_conv.id) if buyer_conv else None
+        seller_conversation_id = str(seller_conv.id) if seller_conv else None
+
         # Dynamically determine who is the buyer and who is the seller based on escrow role configuration
         if escrow.role == "seller":
             seller = escrow.created_by
@@ -134,6 +150,8 @@ class KYCAssignedDisputeDetailView(APIView):
             "images": [img.image.url for img in dispute.images.all() if img.image],
             "current_status": dispute.status,
             "created_at": dispute.created_at,
+            "buyer_conversation_id": buyer_conversation_id,
+            "seller_conversation_id": seller_conversation_id,
             "who_claimed": {
                 "id": dispute.raised_by.id,
                 "username": dispute.raised_by.username,
@@ -145,12 +163,14 @@ class KYCAssignedDisputeDetailView(APIView):
                 "username": buyer.username if buyer else "",
                 "full_name": buyer.full_name if buyer else "",
                 "email": buyer.email if buyer else "",
+                "conversation_id": buyer_conversation_id,
             },
             "seller": {
                 "id": seller.id if seller else None,
                 "username": seller.username if seller else "",
                 "full_name": seller.full_name if seller else "",
                 "email": seller.email if seller else "",
+                "conversation_id": seller_conversation_id,
             },
             "escrow_info": {
                 "id": escrow.id,

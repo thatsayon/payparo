@@ -9,6 +9,8 @@ from .views import (
     AdminProfilePageView,
     AdminProfileUpdateView,
     AdminPasswordUpdateView,
+    AdminWithdrawRequestListView,
+    AdminWithdrawRequestStatusUpdateView,
 )
 
 urlpatterns = [
@@ -20,4 +22,6 @@ urlpatterns = [
     path("profile/", AdminProfilePageView.as_view(), name="admin-profile"),
     path("profile/update/", AdminProfileUpdateView.as_view(), name="admin-profile-update"),
     path("profile/password/", AdminPasswordUpdateView.as_view(), name="admin-password-update"),
+    path("withdraw-requests/", AdminWithdrawRequestListView.as_view(), name="admin-withdraw-list"),
+    path("withdraw-requests/<uuid:pk>/status/", AdminWithdrawRequestStatusUpdateView.as_view(), name="admin-withdraw-status-update"),
 ]
