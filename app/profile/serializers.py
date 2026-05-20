@@ -122,12 +122,11 @@ class ProfileHomeSerializer(serializers.ModelSerializer):
 
     def get_total_completed_escrows(self, obj):
         return Escrow.objects.filter(
-            Q(created_by=obj) | Q(receiver=obj),
-            status=Escrow.Status.COMPLETED
+            Q(created_by=obj) | Q(receiver=obj)
         ).count()
 
     def get_rating(self, obj):
-        avg = obj.received_reviews.aggregate(average=Avg('rating'))['average']
+        avg = obj.received_ratings.aggregate(average=Avg('stars'))['average']
         return round(avg, 2) if avg else 0.0
 
 class BankAccountSerializer(serializers.ModelSerializer):

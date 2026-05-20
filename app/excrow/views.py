@@ -13,7 +13,8 @@ from .models import (
     EscrowInstallment, 
     EscrowStatusHistory,
     EscrowDispute,
-    EscrowDisputeImage
+    EscrowDisputeImage,
+    EscrowRating
 )
 from .serializers import (
     EscrowCreateSerializer,
@@ -23,6 +24,8 @@ from .serializers import (
     OrderHistorySerializer,
     OrderHistoryDetailSerializer,
     DisputeListSerializer,
+    EscrowRatingSerializer,
+    EscrowRatingReadSerializer,
 )
 
 User = get_user_model()
@@ -201,6 +204,15 @@ class EscrowListCreateView(APIView):
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
+        from app.notification.utils import send_notification
+        send_notification(
+            user=receiver,
+            title="Escrow Request",
+            body=f"You have a new escrow request from {request.user.username}.",
+            event_type="escrow_created",
+            reference_id=str(escrow.id)
+        )
+
         return Response(
             {
                 "success": True,
@@ -373,6 +385,15 @@ class EscrowAcceptView(APIView):
         escrow.status = Escrow.Status.ACCEPTED
         escrow.save()
 
+        from app.notification.utils import send_notification
+        send_notification(
+            user=escrow.created_by,
+            title="Escrow Accepted",
+            body=f"{request.user.username} has accepted your escrow request.",
+            event_type="escrow_accepted",
+            reference_id=str(escrow.id)
+        )
+
         return Response({"success": True, "message": "Escrow accepted successfully.", "status": escrow.status}, status=status.HTTP_200_OK)
 
 
@@ -410,7 +431,17 @@ class EscrowSendProductView(APIView):
         escrow.status = Escrow.Status.IN_PROGRESS
         escrow.save()
 
-        return Response({"success": True, "message": "Product marked as sent. Status updated to In Progress.", "status": escrow.status}, status=status.HTTP_200_OK)
+        buyer_user = escrow.receiver if escrow.role == Escrow.Role.SELLER else escrow.created_by
+        from app.notification.utils import send_notification
+        send_notification(
+            user=buyer_user,
+            title="Product Shipped",
+            body=f"The seller has marked your product as shipped.",
+            event_type="escrow_shipped",
+            reference_id=str(escrow.id)
+        )
+
+        return Response({"success": True, "message": "Product marked as sent. Status is now IN_PROGRESS.", "status": escrow.status}, status=status.HTTP_200_OK)
 
 
 class EscrowDeliveredView(APIView):
@@ -447,6 +478,16 @@ class EscrowDeliveredView(APIView):
         escrow.status = Escrow.Status.DELIVERED
         escrow.save()
 
+        seller_user = escrow.created_by if escrow.role == Escrow.Role.SELLER else escrow.receiver
+        from app.notification.utils import send_notification
+        send_notification(
+            user=seller_user,
+            title="Product Delivered",
+            body=f"The buyer has marked your product as delivered.",
+            event_type="escrow_delivered",
+            reference_id=str(escrow.id)
+        )
+
         return Response({"success": True, "message": "Delivery confirmed. Status updated to Delivered.", "status": escrow.status}, status=status.HTTP_200_OK)
 
 
@@ -479,6 +520,9 @@ class EscrowDisputeView(APIView):
         if escrow.status != Escrow.Status.DELIVERED:
             return Response({"error": f"Dispute can only be initiated when status is 'Delivered'. Current: '{escrow.get_status_display()}'."}, status=status.HTTP_400_BAD_REQUEST)
 
+        if not escrow.can_dispute:
+            return Response({"error": "The 24-hour window to initiate a dispute has expired."}, status=status.HTTP_400_BAD_REQUEST)
+
         reason = request.data.get("reason", "").strip()
         note = request.data.get("note", "").strip()
         images = request.FILES.getlist("images")
@@ -510,6 +554,16 @@ class EscrowDisputeView(APIView):
         # Update escrow status to dispute in progress
         escrow.status = Escrow.Status.DISPUTE_IN_PROGRESS
         escrow.save()
+
+        seller_user = escrow.created_by if escrow.role == Escrow.Role.SELLER else escrow.receiver
+        from app.notification.utils import send_notification
+        send_notification(
+            user=seller_user,
+            title="Issue Reported",
+            body=f"The buyer has opened a dispute on your escrow.",
+            event_type="escrow_disputed",
+            reference_id=str(escrow.id)
+        )
 
         # Fire Gemini AI analysis in background
         try:
@@ -821,3 +875,83 @@ class KYCDisputeAssignView(APIView):
         conv_buyer.participants.add(request.user, buyer)
 
         return Response({"success": True, "message": "Dispute assigned successfully and conversations created."}, status=status.HTTP_200_OK)
+
+
+# ──────────────────────────────────────────────
+# Rate a Buyer
+# ──────────────────────────────────────────────
+
+class EscrowRatingView(APIView):
+    """
+    POST /api/escrow/<pk>/rate/
+    Allows the user to rate the other party after the escrow is DELIVERED.
+    """
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request, pk):
+        try:
+            escrow = Escrow.objects.select_related('created_by', 'receiver').get(pk=pk)
+        except Escrow.DoesNotExist:
+            return Response({"error": "Escrow not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        user = request.user
+
+        if user not in [escrow.created_by, escrow.receiver]:
+            return Response({"error": "Only participants can rate."}, status=status.HTTP_403_FORBIDDEN)
+        
+        # Determine rated user
+        rated_user = escrow.receiver if user == escrow.created_by else escrow.created_by
+
+        if escrow.status not in [Escrow.Status.DELIVERED, Escrow.Status.COMPLETED]:
+            return Response(
+                {"error": "Rating is only available after delivery is confirmed."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Prevent duplicate ratings from the same user
+        if EscrowRating.objects.filter(escrow=escrow, rated_by=user).exists():
+            return Response({"error": "You have already rated this user."}, status=status.HTTP_400_BAD_REQUEST)
+
+        serializer = EscrowRatingSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response({"error": serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
+
+        rating = serializer.save(
+            escrow=escrow,
+            rated_by=user,
+            rated_user=rated_user
+        )
+
+        # Send notification to the rated user
+        try:
+            from app.notification.utils import send_notification
+            send_notification(
+                user=rated_user,
+                title="You've been rated!",
+                body=f"{user.username} gave you {rating.stars}★ on your recent escrow.",
+                event_type="rating_received",
+                reference_id=str(escrow.id)
+            )
+        except Exception:
+            pass
+
+        return Response(
+            {
+                "success": True,
+                "message": "Rating submitted successfully.",
+                "rating": EscrowRatingReadSerializer(rating).data
+            },
+            status=status.HTTP_201_CREATED
+        )
+
+    def get(self, request, pk):
+        """Get the rating given by the current user for a specific escrow."""
+        if not request.user.is_authenticated:
+            return Response({"rating": None}, status=status.HTTP_200_OK)
+            
+        try:
+            rating = EscrowRating.objects.select_related('rated_by', 'rated_user').get(escrow_id=pk, rated_by=request.user)
+        except EscrowRating.DoesNotExist:
+            return Response({"rating": None}, status=status.HTTP_200_OK)
+
+        return Response({"rating": EscrowRatingReadSerializer(rating).data})

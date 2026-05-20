@@ -114,6 +114,26 @@ class Escrow(BaseModel):
         super().__init__(*args, **kwargs)
         self._original_status = self.status
 
+    @property
+    def dispute_deadline(self):
+        """Returns the datetime when the dispute period expires, or None if not delivered yet."""
+        delivered_history = self.status_history.filter(status=self.Status.DELIVERED).order_by('-created_at').first()
+        if not delivered_history:
+            return None
+        from datetime import timedelta
+        return delivered_history.created_at + timedelta(hours=24)
+
+    @property
+    def can_dispute(self):
+        """Checks if the buyer can still raise a dispute based on the 24-hour window."""
+        if self.status != self.Status.DELIVERED:
+            return False
+        deadline = self.dispute_deadline
+        if not deadline:
+            return True
+        from django.utils import timezone
+        return timezone.now() <= deadline
+
     def __str__(self):
         return f"Escrow #{self.id} — {self.product_name} ({self.status})"
 
@@ -328,3 +348,36 @@ class EscrowDisputeImage(BaseModel):
 
     def __str__(self):
         return f"Dispute Image for Escrow #{self.dispute.escrow_id}"
+
+
+class EscrowRating(BaseModel):
+    """
+    Rating given by one party to the other after delivery is confirmed.
+    Each user can only leave one rating per escrow.
+    """
+    escrow = models.ForeignKey(
+        Escrow,
+        on_delete=models.CASCADE,
+        related_name="ratings"
+    )
+    # The user who gives the rating
+    rated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="given_ratings"
+    )
+    # The user being rated
+    rated_user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="received_ratings"
+    )
+    stars = models.PositiveSmallIntegerField()   # 1 – 5
+    note = models.TextField(blank=True, default="")
+
+    class Meta:
+        ordering = ["-created_at"]
+        unique_together = (('escrow', 'rated_by'),)
+
+    def __str__(self):
+        return f"{self.rated_by.username} rated {self.rated_user.username} {self.stars}★ on escrow #{self.escrow.order_id}"

@@ -8,10 +8,11 @@ class RegisterSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True, min_length=4)
     password_confirm = serializers.CharField(write_only=True, min_length=4)
     full_name = serializers.CharField(required=False, default="", max_length=80)
+    referral_code = serializers.CharField(write_only=True, required=False, allow_blank=True)
 
     class Meta:
         model = User
-        fields = ("email", "full_name", "password", "password_confirm")
+        fields = ("email", "full_name", "password", "password_confirm", "referral_code")
 
     def validate_email(self, value: str) -> str:
         return value.lower().strip()
@@ -21,15 +22,47 @@ class RegisterSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError(
                 {"password_confirm": "Passwords do not match."}
             )
+        
+        referral_code = attrs.get("referral_code")
+        if referral_code:
+            from app.refer.models import ReferralProfile
+            if not ReferralProfile.objects.filter(referral_code=referral_code).exists():
+                raise serializers.ValidationError(
+                    {"referral_code": "Invalid referral code."}
+                )
         return attrs
 
     def create(self, validated_data):
         validated_data.pop("password_confirm")
-        return User.objects.create_user(
+        referral_code = validated_data.pop("referral_code", None)
+        
+        user = User.objects.create_user(
             email=validated_data["email"],
             password=validated_data["password"],
             full_name=validated_data["full_name"],
         )
+        
+        if referral_code:
+            from app.refer.models import ReferralProfile, ReferralEarning
+            from django.utils import timezone
+            try:
+                referrer_profile = ReferralProfile.objects.get(referral_code=referral_code)
+                if referrer_profile.user != user:
+                    profile, _ = ReferralProfile.objects.get_or_create(user=user)
+                    profile.referred_by = referrer_profile.user
+                    profile.referred_at = timezone.now()
+                    profile.save()
+                    
+                    ReferralEarning.objects.create(
+                        referrer=referrer_profile.user,
+                        referred_user=user,
+                        amount=ReferralProfile.REFERRAL_COMMISSION_AMOUNT,
+                        status=ReferralEarning.Status.PENDING
+                    )
+            except ReferralProfile.DoesNotExist:
+                pass
+                
+        return user
 
 
 class LoginSerializer(serializers.Serializer):

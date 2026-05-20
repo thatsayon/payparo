@@ -2,7 +2,7 @@ from rest_framework import serializers
 from django.contrib.auth import get_user_model
 from django.db import transaction
 
-from .models import Escrow, EscrowInstallment, EscrowImage, EscrowDocument, EscrowStatusHistory, EscrowDispute, EscrowDisputeImage
+from .models import Escrow, EscrowInstallment, EscrowImage, EscrowDocument, EscrowStatusHistory, EscrowDispute, EscrowDisputeImage, EscrowRating
 from app.administration.models import FeeConfiguration
 
 User = get_user_model()
@@ -48,16 +48,55 @@ class EscrowStatusHistorySerializer(serializers.ModelSerializer):
         fields = ["id", "status", "created_at"]
 
 
+class SimplifiedRatingSerializer(serializers.ModelSerializer):
+    rated_by_username = serializers.CharField(source='rated_by.username', read_only=True)
+    rated_by_full_name = serializers.CharField(source='rated_by.full_name', read_only=True)
+
+    class Meta:
+        model = EscrowRating
+        fields = ["id", "stars", "note", "created_at", "rated_by_username", "rated_by_full_name"]
+
+
 class ReceiverSerializer(serializers.ModelSerializer):
+    rating = serializers.SerializerMethodField()
+    total_completed_escrows = serializers.SerializerMethodField()
+    reviews = serializers.SerializerMethodField()
+
     class Meta:
         model  = User
-        fields = ["id", "email", "username", "full_name"]
+        fields = ["id", "email", "username", "full_name", "rating", "total_completed_escrows", "reviews"]
+
+    def get_rating(self, obj):
+        from django.db.models import Avg
+        avg = obj.received_ratings.aggregate(average=Avg('stars'))['average']
+        return round(avg, 2) if avg else 0.0
+
+    def get_total_completed_escrows(self, obj):
+        from django.db.models import Q
+        return Escrow.objects.filter(
+            Q(created_by=obj) | Q(receiver=obj)
+        ).count()
+
+    def get_reviews(self, obj):
+        ratings = obj.received_ratings.all()
+        return SimplifiedRatingSerializer(ratings, many=True).data
 
 
 class EscrowDisputeImageSerializer(serializers.ModelSerializer):
+    image = serializers.SerializerMethodField()
+
     class Meta:
         model = EscrowDisputeImage
         fields = ["id", "image", "created_at"]
+
+    def get_image(self, obj):
+        request = self.context.get('request')
+        if obj.image:
+            url = obj.image.url
+            if request:
+                return request.build_absolute_uri(url)
+            return url
+        return None
 
 
 class EscrowDisputeSerializer(serializers.ModelSerializer):
@@ -343,11 +382,14 @@ class EscrowDetailSerializer(serializers.ModelSerializer):
 class OrderHistorySerializer(serializers.ModelSerializer):
     user_role = serializers.SerializerMethodField()
     is_creator = serializers.SerializerMethodField()
+    created_by = ReceiverSerializer(read_only=True)
+    receiver   = ReceiverSerializer(read_only=True)
 
     class Meta:
         model = Escrow
         fields = [
-            "id", "order_id", "product_name", "status", "created_at", "user_role", "is_creator"
+            "id", "order_id", "product_name", "status", "created_at",
+            "user_role", "is_creator", "created_by", "receiver"
         ]
 
     def get_user_role(self, obj):
@@ -369,6 +411,7 @@ class OrderHistorySerializer(serializers.ModelSerializer):
         return obj.created_by_id == request.user.id
 
 
+
 class OrderHistoryDetailSerializer(serializers.ModelSerializer):
     created_by = ReceiverSerializer(read_only=True)
     receiver   = ReceiverSerializer(read_only=True)
@@ -379,6 +422,8 @@ class OrderHistoryDetailSerializer(serializers.ModelSerializer):
     user_role = serializers.SerializerMethodField()
     is_creator = serializers.SerializerMethodField()
     available_actions = serializers.SerializerMethodField()
+    dispute_deadline = serializers.DateTimeField(read_only=True)
+    can_dispute = serializers.BooleanField(read_only=True)
 
     class Meta:
         model = Escrow
@@ -386,7 +431,8 @@ class OrderHistoryDetailSerializer(serializers.ModelSerializer):
             "id", "order_id", "product_name", "price", 
             "created_by", "receiver", "images", "cover_image", 
             "status", "status_history", "dispute", "created_at",
-            "user_role", "is_creator", "available_actions"
+            "user_role", "is_creator", "available_actions",
+            "dispute_deadline", "can_dispute"
         ]
 
     def get_cover_image(self, obj):
@@ -503,11 +549,12 @@ class OrderHistoryDetailSerializer(serializers.ModelSerializer):
                     "message": None,
                 })
             elif s == Escrow.Status.DELIVERED:
+                can_dispute = obj.can_dispute
                 actions.append({
                     "action":  "dispute",
                     "label":   "Dispute",
-                    "enabled": True,
-                    "message": None,
+                    "enabled": can_dispute,
+                    "message": None if can_dispute else "The 24-hour dispute window has expired.",
                 })
 
         return actions
@@ -532,3 +579,25 @@ class DisputeListSerializer(serializers.ModelSerializer):
             # receiver is always the opposite party
             return Escrow.Role.BUYER if obj.role == Escrow.Role.SELLER else Escrow.Role.SELLER
         return None
+
+
+class EscrowRatingSerializer(serializers.ModelSerializer):
+    """Write serializer — used when submitting a rating."""
+    class Meta:
+        model = EscrowRating
+        fields = ["stars", "note"]
+
+    def validate_stars(self, value):
+        if not 1 <= value <= 5:
+            raise serializers.ValidationError("Stars must be between 1 and 5.")
+        return value
+
+
+class EscrowRatingReadSerializer(serializers.ModelSerializer):
+    """Read serializer — exposes full rating detail."""
+    rated_by = ReceiverSerializer(read_only=True)
+    rated_user = ReceiverSerializer(read_only=True)
+
+    class Meta:
+        model = EscrowRating
+        fields = ["id", "escrow", "rated_by", "rated_user", "stars", "note", "created_at"]

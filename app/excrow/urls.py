@@ -12,6 +12,7 @@ from .views import (
     DisputeListView,
     RecentEscrowsView,
     SellerDisputeResponseView,
+    EscrowRatingView,
 )
 
 urlpatterns = [
@@ -22,6 +23,7 @@ urlpatterns = [
     path("<uuid:pk>/send-product/", EscrowSendProductView.as_view(), name="escrow-send-product"),
     path("<uuid:pk>/delivered/", EscrowDeliveredView.as_view(), name="escrow-delivered"),
     path("<uuid:pk>/dispute/", EscrowDisputeView.as_view(), name="escrow-dispute"),
+    path("<uuid:pk>/rate/", EscrowRatingView.as_view(), name="escrow-rate"),
     path("order-history/", OrderHistory.as_view(), name="order-history"),
     path("order-history/<uuid:pk>/", OrderHistoryDetailView.as_view(), name="order-history-detail"),
     path("recent/", RecentEscrowsView.as_view(), name="recent-escrows"),

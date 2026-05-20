@@ -5,8 +5,8 @@ from django.conf import settings
 from app.common.models import BaseModel
 
 def generate_referral_code():
-    chars = string.ascii_lowercase + string.digits
-    return "escrow-" + "".join(random.choices(chars, k=10))
+    chars = string.ascii_uppercase + string.digits
+    return "".join(random.choices(chars, k=8))
 
 class ReferralProfile(BaseModel):
     user = models.OneToOneField(
@@ -24,8 +24,11 @@ class ReferralProfile(BaseModel):
         blank=True, 
         related_name="referred_users"
     )
+    referred_at = models.DateTimeField(null=True, blank=True)
     
     total_earnings = models.DecimalField(max_digits=14, decimal_places=2, default=0.00)
+
+    REFERRAL_COMMISSION_AMOUNT = 10.00
 
     def __str__(self):
         return f"Referral Profile: {self.user.email} ({self.referral_code})"
