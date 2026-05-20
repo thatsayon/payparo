@@ -2,6 +2,7 @@ from django.urls import path
 
 from .views import (
     UserManagementView,
+    UserSuspendView,
     EscrowTransactionsView,
     KYCSubmissionListView,
     KYCSubmissionStatusUpdateView,
@@ -11,10 +12,14 @@ from .views import (
     AdminPasswordUpdateView,
     AdminWithdrawRequestListView,
     AdminWithdrawRequestStatusUpdateView,
+    AdminRevenueView,
+    AdminDashboardOverviewView,
 )
 
 urlpatterns = [
+    path("overview/", AdminDashboardOverviewView.as_view(), name="admin-overview"),
     path("users/", UserManagementView.as_view(), name="user-management"),
+    path("users/<uuid:pk>/suspend/", UserSuspendView.as_view(), name="user-suspend"),
     path("escrows/", EscrowTransactionsView.as_view(), name="escrow-transactions"),
     path("escrows/<uuid:pk>/", EscrowDetailPageView.as_view(), name="escrow-detail"),
     path("kyc-requests/", KYCSubmissionListView.as_view(), name="kyc-list"),
@@ -24,4 +29,5 @@ urlpatterns = [
     path("profile/password/", AdminPasswordUpdateView.as_view(), name="admin-password-update"),
     path("withdraw-requests/", AdminWithdrawRequestListView.as_view(), name="admin-withdraw-list"),
     path("withdraw-requests/<uuid:pk>/status/", AdminWithdrawRequestStatusUpdateView.as_view(), name="admin-withdraw-status-update"),
+    path("revenue/", AdminRevenueView.as_view(), name="admin-revenue"),
 ]

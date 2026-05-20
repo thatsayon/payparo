@@ -8,6 +8,8 @@ from drf_spectacular.views import (
     SpectacularSwaggerView,
     SpectacularRedocView,
 )
+from app.affiliate.views import AffiliateClickTrackView
+from app.affiliate.urls import admin_affiliate_urlpatterns
 
 urlpatterns = [
     path('admin/', admin.site.urls),
@@ -27,8 +29,17 @@ urlpatterns = [
     # Profile & Wallet
     path('api/profile/', include('app.profile.urls')),
 
-    # Refer & Earn
+    # Refer & Earn (simple referral - legacy)
     path('api/refer/', include('app.refer.urls')),
+
+    # Affiliate System
+    path('api/affiliate/', include('app.affiliate.urls')),
+
+    # Admin Affiliate Management (extends administration)
+    path('api/administration/', include(admin_affiliate_urlpatterns)),
+
+    # Affiliate Click Tracking & Redirect (public)
+    path('p/<slug:slug>/', AffiliateClickTrackView.as_view(), name='affiliate-click'),
 
     # AI Dispute Analysis (staff only)
     path('api/ai/', include('app.ai.urls')),

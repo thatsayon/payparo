@@ -723,17 +723,24 @@ class SellerDisputeResponseView(APIView):
 
 class KYCDisputeResolveView(APIView):
     """
-    POST — Staff/KYC resolves a dispute in pending_kyc.
+    POST — KYC Specialist or Admin resolves a dispute in pending_kyc.
     Body: { "decision": "buyer_correct" | "seller_correct", "reason": "..." }
     If buyer_correct AND seller previously rejected AI: charge $10 from seller wallet.
     """
-    permission_classes = [permissions.IsAdminUser]
+    permission_classes = [permissions.IsAuthenticated]
 
     def post(self, request, pk):
+        if request.user.role not in ("kyc", "admin"):
+            return Response(
+                {"error": "You do not have permission to resolve disputes. KYC or Admin role required."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
         try:
             dispute = EscrowDispute.objects.select_related("escrow").get(pk=pk)
         except EscrowDispute.DoesNotExist:
             return Response({"error": "Dispute not found."}, status=status.HTTP_404_NOT_FOUND)
+
 
         if dispute.status != EscrowDispute.StatusChoices.PENDING_KYC:
             return Response(

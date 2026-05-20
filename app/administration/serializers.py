@@ -4,12 +4,26 @@ from app.accounts.models import KYCSubmission, UserAccount
 from app.excrow.models import Escrow
 
 
+class RevenueStatsSerializer(serializers.Serializer):
+    today_revenue = serializers.DecimalField(max_digits=16, decimal_places=2)
+    this_week_revenue = serializers.DecimalField(max_digits=16, decimal_places=2)
+    this_month_revenue = serializers.DecimalField(max_digits=16, decimal_places=2)
+    total_revenue = serializers.DecimalField(max_digits=16, decimal_places=2)
+    total_escrow_volume = serializers.DecimalField(max_digits=16, decimal_places=2)
+    total_completed_escrows = serializers.IntegerField()
+    total_active_escrows = serializers.IntegerField()
+    total_refunded_escrows = serializers.IntegerField()
+    monthly_revenue = serializers.ListField(child=serializers.DictField())
+    recent_escrows = serializers.ListField(child=serializers.DictField())
+
+
 class UserManagementUserSerializer(serializers.ModelSerializer):
     kyc_status = serializers.SerializerMethodField()
     kyc_label = serializers.SerializerMethodField()
     badge_class = serializers.SerializerMethodField()
     transaction_count = serializers.IntegerField(read_only=True)
     full_name = serializers.SerializerMethodField()
+    is_suspended = serializers.SerializerMethodField()
 
     class Meta:
         model = UserAccount
@@ -21,6 +35,9 @@ class UserManagementUserSerializer(serializers.ModelSerializer):
             "kyc_label",
             "badge_class",
             "transaction_count",
+            "is_suspended",
+            "date_joined",
+            "role",
         )
 
     def get_full_name(self, obj):
@@ -50,6 +67,9 @@ class UserManagementUserSerializer(serializers.ModelSerializer):
             "not_submitted": "muted",
         }
         return badges.get(status_value, "muted")
+
+    def get_is_suspended(self, obj):
+        return not obj.is_active
 
 
 class EscrowTransactionsSerializer(serializers.ModelSerializer):

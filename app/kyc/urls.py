@@ -7,9 +7,11 @@ from .views import (
     KYCAssignedDisputeListView,
     KYCAssignedDisputeDetailView,
     KYCDisputeListView,
+    KYCProfileView,
 )
 
 urlpatterns = [
+    path('profile/', KYCProfileView.as_view(), name='kyc-profile'),
     path('disputes/assigned/<uuid:pk>/', KYCAssignedDisputeDetailView.as_view(), name='dispute-detail-assigned-kyc'),
     path('disputes/assigned/', KYCAssignedDisputeListView.as_view(), name='dispute-list-assigned-kyc'),
     path('disputes/unassigned/', KYCDisputeListView.as_view(), name='dispute-list-kyc'),

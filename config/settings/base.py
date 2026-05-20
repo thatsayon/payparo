@@ -54,11 +54,14 @@ INSTALLED_APPS += [
     'app.administration',
     'app.profile',
     'app.refer',
+    'app.affiliate',
     'app.notification',
     'app.messaging',
     'app.ai',
     'app.kyc',
 ]
+
+SITE_BASE_URL = env("SITE_BASE_URL", default="https://payparo.com")
 
 
 MIDDLEWARE = [

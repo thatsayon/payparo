@@ -78,6 +78,7 @@ class UserAccount(AbstractBaseUser, PermissionsMixin, BaseModel):
         USER = "user", "User"
         ADMIN = "admin", "Admin"
         KYC = "kyc", "KYC Specialist"
+        AFFILIATE = "affiliate", "Affiliate"
 
     email = models.EmailField(
         _("email address"),

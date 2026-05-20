@@ -23,6 +23,7 @@ from .serializers import (
     AdminProfileUpdateSerializer,
     AdminPasswordUpdateSerializer,
     AdminWithdrawRequestListSerializer,
+    RevenueStatsSerializer,
 )
 
 
@@ -60,6 +61,43 @@ class UserManagementView(generics.ListAPIView):
             queryset = queryset.filter(annotated_kyc_status=status_filter)
 
         return queryset
+
+
+class UserSuspendView(APIView):
+    """
+    PATCH /administration/users/<uuid:pk>/suspend/
+    Toggles is_active on a user account.
+    Body: {"suspend": true}  → suspend (is_active=False)
+          {"suspend": false} → unsuspend (is_active=True)
+    Returns the updated user object.
+    """
+    permission_classes = [permissions.IsAdminUser]
+
+    def patch(self, request, pk, *args, **kwargs):
+        try:
+            user = UserAccount.objects.get(pk=pk)
+        except UserAccount.DoesNotExist:
+            return Response({"detail": "User not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        # Prevent admins from suspending themselves or other admins
+        if user.role in [UserAccount.Role.ADMIN, UserAccount.Role.KYC]:
+            return Response(
+                {"detail": "Cannot suspend an admin or KYC specialist account."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        suspend = request.data.get("suspend")
+        if suspend is None:
+            return Response({"detail": "Field 'suspend' (boolean) is required."}, status=status.HTTP_400_BAD_REQUEST)
+
+        user.is_active = not bool(suspend)
+        user.save(update_fields=["is_active"])
+
+        action = "suspended" if suspend else "unsuspended"
+        return Response(
+            {"detail": f"User has been {action}.", "is_suspended": not user.is_active},
+            status=status.HTTP_200_OK,
+        )
 
 
 class EscrowTransactionsView(generics.ListAPIView):
@@ -467,3 +505,223 @@ class AdminWithdrawRequestStatusUpdateView(APIView):
             },
             status=status.HTTP_200_OK,
         )
+
+
+class AdminRevenueView(APIView):
+    """
+    GET /api/administration/revenue/
+    Returns real platform revenue derived from completed escrow fee_amount,
+    monthly breakdown for the past 12 months, and recent completed escrows.
+    """
+    permission_classes = [permissions.IsAdminUser]
+
+    def get(self, request):
+        from django.db.models import Sum
+        from django.db.models.functions import TruncMonth
+        from decimal import Decimal
+
+        now = timezone.now()
+        today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        week_start = today_start - timedelta(days=now.weekday())
+        month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+
+        completed_qs = Escrow.objects.filter(status=Escrow.Status.COMPLETED)
+
+        # ── Revenue from platform fees on completed escrows ───────────────────
+        total_revenue = completed_qs.aggregate(
+            t=Sum("fee_amount")
+        )["t"] or Decimal("0.00")
+
+        today_revenue = completed_qs.filter(
+            updated_at__gte=today_start
+        ).aggregate(t=Sum("fee_amount"))["t"] or Decimal("0.00")
+
+        week_revenue = completed_qs.filter(
+            updated_at__gte=week_start
+        ).aggregate(t=Sum("fee_amount"))["t"] or Decimal("0.00")
+
+        month_revenue = completed_qs.filter(
+            updated_at__gte=month_start
+        ).aggregate(t=Sum("fee_amount"))["t"] or Decimal("0.00")
+
+        # ── Total escrow volume (price of completed transactions) ─────────────
+        total_volume = completed_qs.aggregate(
+            v=Sum("total_amount")
+        )["v"] or Decimal("0.00")
+
+        # ── Counts ────────────────────────────────────────────────────────────
+        total_completed = completed_qs.count()
+        total_refunded = Escrow.objects.filter(status=Escrow.Status.REFUNDED).count()
+        active_statuses = [
+            Escrow.Status.FUNDED,
+            Escrow.Status.ACCEPTED,
+            Escrow.Status.IN_PROGRESS,
+            Escrow.Status.SHIPPED,
+            Escrow.Status.UNDER_REVIEW,
+        ]
+        total_active = Escrow.objects.filter(status__in=active_statuses).count()
+
+        # ── Monthly revenue: last 12 months ───────────────────────────────────
+        twelve_months_ago = now - timedelta(days=365)
+        monthly_qs = (
+            completed_qs
+            .filter(updated_at__gte=twelve_months_ago)
+            .annotate(month=TruncMonth("updated_at"))
+            .values("month")
+            .annotate(revenue=Sum("fee_amount"))
+            .order_by("month")
+        )
+        monthly_revenue = [
+            {
+                "month": entry["month"].strftime("%b %Y"),
+                "revenue": float(entry["revenue"] or 0),
+            }
+            for entry in monthly_qs
+        ]
+
+        # ── Recent 10 completed escrows ────────────────────────────────────────
+        recent_qs = completed_qs.select_related("created_by", "receiver").order_by("-updated_at")[:10]
+        recent_escrows = []
+        for e in recent_qs:
+            seller = None
+            buyer = None
+            if e.role == Escrow.Role.SELLER:
+                seller = e.created_by
+                buyer = e.receiver
+            else:
+                buyer = e.created_by
+                seller = e.receiver
+
+            recent_escrows.append({
+                "order_id": e.order_id,
+                "product_name": e.product_name,
+                "total_amount": float(e.total_amount or e.price or 0),
+                "fee_amount": float(e.fee_amount or 0),
+                "currency": e.currency,
+                "seller": seller.full_name or seller.email if seller else "N/A",
+                "buyer": buyer.full_name or buyer.email if buyer else "N/A",
+                "completed_at": e.updated_at.isoformat(),
+            })
+
+        payload = {
+            "today_revenue": today_revenue,
+            "this_week_revenue": week_revenue,
+            "this_month_revenue": month_revenue,
+            "total_revenue": total_revenue,
+            "total_escrow_volume": total_volume,
+            "total_completed_escrows": total_completed,
+            "total_active_escrows": total_active,
+            "total_refunded_escrows": total_refunded,
+            "monthly_revenue": monthly_revenue,
+            "recent_escrows": recent_escrows,
+        }
+
+        serializer = RevenueStatsSerializer(payload)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+from django.db.models import Sum
+from app.excrow.models import Escrow, EscrowDispute
+
+class AdminDashboardOverviewView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request, *args, **kwargs):
+        # 1. Stats Cards
+        total_users = UserAccount.objects.count()
+        pending_kyc = KYCSubmission.objects.filter(status__in=["pending", "under_review"]).count()
+        
+        active_escrows_qs = Escrow.objects.exclude(status__in=["completed", "cancelled", "refunded", "created"])
+        active_escrow_volume = active_escrows_qs.aggregate(vol=Sum('price'))['vol'] or Decimal('0.00')
+        
+        open_disputes = EscrowDispute.objects.filter(status__in=["pending_ai", "awaiting_seller", "pending_kyc"]).count()
+        
+        # 2. Escrow Line Chart (Last 6 Months)
+        now = timezone.now()
+        months_data = []
+        for i in range(5, -1, -1):
+            start_date = (now - timedelta(days=i*30)).replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+            if start_date.month == 12:
+                end_date = start_date.replace(year=start_date.year + 1, month=1)
+            else:
+                end_date = start_date.replace(month=start_date.month + 1)
+                
+            monthly_escrows = Escrow.objects.filter(created_at__gte=start_date, created_at__lt=end_date)
+            escrow_count = monthly_escrows.count()
+            escrow_vol = monthly_escrows.aggregate(vol=Sum('price'))['vol'] or Decimal('0.00')
+            
+            months_data.append({
+                "month": start_date.strftime("%B"),
+                "count": escrow_count,
+                "volume": float(escrow_vol)
+            })
+            
+        # 3. User Registration Bar Chart (Last 6 Months)
+        user_reg_data = []
+        for i in range(5, -1, -1):
+            start_date = (now - timedelta(days=i*30)).replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+            if start_date.month == 12:
+                end_date = start_date.replace(year=start_date.year + 1, month=1)
+            else:
+                end_date = start_date.replace(month=start_date.month + 1)
+                
+            monthly_users = UserAccount.objects.filter(created_at__gte=start_date, created_at__lt=end_date)
+            user_reg_data.append({
+                "month": start_date.strftime("%b"),
+                "registrations": monthly_users.count()
+            })
+            
+        # 4. Activity Feed (Merged and sorted timeline)
+        activities = []
+        
+        # Recent User Signups
+        recent_signups = UserAccount.objects.order_by('-created_at')[:5]
+        for u in recent_signups:
+            activities.append({
+                "id": f"signup-{u.id}",
+                "type": "signup",
+                "title": "New User Registered",
+                "description": f"{u.full_name or u.email} joined the platform.",
+                "timestamp": u.created_at.isoformat()
+            })
+            
+        # Recent Escrows
+        recent_escrows = Escrow.objects.order_by('-created_at')[:5]
+        for e in recent_escrows:
+            activities.append({
+                "id": f"escrow-{e.id}",
+                "type": "escrow",
+                "title": "Escrow Created",
+                "description": f"Order {e.order_id} ({e.product_name}) created for {e.price} {e.currency}.",
+                "timestamp": e.created_at.isoformat()
+            })
+            
+        # Recent Disputes
+        recent_disputes = EscrowDispute.objects.order_by('-created_at')[:5]
+        for d in recent_disputes:
+            activities.append({
+                "id": f"dispute-{d.id}",
+                "type": "dispute",
+                "title": "Dispute Raised",
+                "description": f"Dispute raised on order {d.escrow.order_id} ({d.reason}).",
+                "timestamp": d.created_at.isoformat()
+            })
+            
+        # Sort activities by timestamp desc and take top 10
+        activities = sorted(activities, key=lambda x: x["timestamp"], reverse=True)[:10]
+        
+        response_data = {
+            "stats": {
+                "total_users": total_users,
+                "pending_kyc": pending_kyc,
+                "active_escrow_volume": float(active_escrow_volume),
+                "open_disputes": open_disputes
+            },
+            "escrow_chart": months_data,
+            "registration_chart": user_reg_data,
+            "activity_feed": activities
+        }
+        
+        return Response(response_data, status=status.HTTP_200_OK)
+
+

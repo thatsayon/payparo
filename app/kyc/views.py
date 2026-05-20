@@ -297,3 +297,35 @@ class KYCDisputeListView(APIView):
         }, status=status.HTTP_200_OK)
 
 
+class KYCProfileView(APIView):
+    """
+    GET /kyc/profile/
+    Returns the current KYC specialist's profile data.
+    Accessible to any authenticated user with role 'kyc' or 'admin'.
+    Returns the same shape as the admin profile endpoint.
+    """
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        user = request.user
+        if user.role not in ("kyc", "admin"):
+            return Response({"error": "KYC or Admin role required."}, status=status.HTTP_403_FORBIDDEN)
+
+        name = user.full_name or user.username or user.email or "Specialist"
+        initials = "".join([part[0] for part in name.split()[:2]]).upper()
+
+        photo_url = None
+        if getattr(user, "profile_pic", None):
+            try:
+                photo_url = request.build_absolute_uri(user.profile_pic.url)
+            except Exception:
+                pass
+
+        return Response({
+            "profile_photo": {
+                "initials": initials,
+                "url": photo_url,
+            },
+            "name": name,
+            "email": user.email,
+        }, status=status.HTTP_200_OK)
