@@ -7,6 +7,7 @@ from .views import (
     ResendRegistrationOTPView,
     LoginView,
     VerifyLogin2FAView,
+    Resend2FALoginOTPView,
     LogoutView,
     ForgetPasswordView,
     ForgetPasswordOTPVerifyView,
@@ -27,6 +28,8 @@ from .admin_views import (
     RemoveKYCView,
     AcceptInviteView,
     VerifyInviteTokenView,
+    PendingKYCListView,
+    KYCApprovalView,
 )
 
 urlpatterns = [
@@ -39,6 +42,7 @@ urlpatterns = [
     # Login / Logout
     path("login/", LoginView.as_view(), name="login"),
     path("login/2fa/verify/", VerifyLogin2FAView.as_view(), name="verify-login-2fa"),
+    path("login/2fa/resend/", Resend2FALoginOTPView.as_view(), name="resend-login-2fa"),
     path("logout/", LogoutView.as_view(), name="logout"),
 
     # Forgot password
@@ -69,4 +73,6 @@ urlpatterns = [
     path("admin/kyc/invite/<uuid:id>/resend/", ResendInviteView.as_view(), name="admin-kyc-resend"),
     path("admin/kyc/", ListKYCView.as_view(), name="admin-kyc-list"),
     path("admin/kyc/<uuid:id>/", RemoveKYCView.as_view(), name="admin-kyc-remove"),
+    path("admin/kyc/pending/", PendingKYCListView.as_view(), name="admin-kyc-pending"),
+    path("admin/kyc/<uuid:id>/review/", KYCApprovalView.as_view(), name="admin-kyc-review"),
 ]

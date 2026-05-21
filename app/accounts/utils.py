@@ -14,7 +14,6 @@ def generate_otp(length: int = 6) -> str:
 
 def hash_otp(otp: str) -> str:
     """Return SHA-256 hex digest of the OTP."""
-    print(otp)
     return hashlib.sha256(otp.encode("utf-8")).hexdigest()
 
 

@@ -90,7 +90,13 @@ class VerifyLogin2FASerializer(serializers.Serializer):
 
 class Toggle2FASerializer(serializers.Serializer):
     enable = serializers.BooleanField()
-    method = serializers.ChoiceField(choices=User.TwoFactorMethod.choices, required=False)
+    # Only email-based 2FA is supported; the method field is kept for
+    # forward-compatibility but is always coerced to 'email'.
+    method = serializers.ChoiceField(
+        choices=['email'],
+        required=False,
+        default='email',
+    )
 
 
 class IDCardUploadSerializer(serializers.Serializer):
@@ -113,3 +119,32 @@ class FaceImageUploadSerializer(serializers.Serializer):
     front_face = serializers.ImageField(required=True, help_text="Straight-on front face photo")
     left_face  = serializers.ImageField(required=True, help_text="Back/left side face photo")
     right_face = serializers.ImageField(required=True, help_text="Right side face photo")
+
+from .models import KYCSubmission, KYCDocument, KYCIdentity
+
+class AdminKYCIdentitySerializer(serializers.ModelSerializer):
+    class Meta:
+        model = KYCIdentity
+        fields = "__all__"
+
+class AdminKYCDocumentSerializer(serializers.ModelSerializer):
+    url = serializers.SerializerMethodField()
+    class Meta:
+        model = KYCDocument
+        fields = ["id", "document_type", "url", "uploaded_at"]
+
+    def get_url(self, obj):
+        return obj.image.url if obj.image else None
+
+class AdminKYCSubmissionSerializer(serializers.ModelSerializer):
+    identity = AdminKYCIdentitySerializer(read_only=True)
+    documents = AdminKYCDocumentSerializer(many=True, read_only=True)
+    user_email = serializers.EmailField(source="user.email", read_only=True)
+    user_name = serializers.CharField(source="user.full_name", read_only=True)
+
+    class Meta:
+        model = KYCSubmission
+        fields = [
+            "id", "user_email", "user_name", "status", "rejection_reason",
+            "submitted_at", "reviewed_at", "identity", "documents"
+        ]

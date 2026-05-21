@@ -5,6 +5,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.parsers import MultiPartParser, FormParser
 from django.shortcuts import get_object_or_404
 from django.contrib.auth import get_user_model
+from django.db.models import Max, OuterRef, Subquery
 
 from app.messaging.models import Conversation, Message, Block, Report
 from app.messaging.serializers import ConversationSerializer, MessageSerializer, BlockSerializer, ReportSerializer
@@ -16,7 +17,25 @@ class ConversationListCreateView(generics.ListCreateAPIView):
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
-        return Conversation.objects.filter(participants=self.request.user)
+        # Annotate each conversation with the timestamp of its latest message,
+        # then sort by that value descending so the most-recently-active
+        # conversation always appears first. Conversations with no messages
+        # fall back to the conversation's own created_at.
+        latest_msg_ts = (
+            Message.objects
+            .filter(conversation=OuterRef('pk'))
+            .order_by('-created_at')
+            .values('created_at')[:1]
+        )
+        return (
+            Conversation.objects
+            .filter(participants=self.request.user)
+            .annotate(last_msg_at=Subquery(latest_msg_ts))
+            .order_by(
+                # NULLs last — conversations without any message stay at the bottom
+                '-last_msg_at', '-created_at'
+            )
+        )
 
     def create(self, request, *args, **kwargs):
         other_username = request.data.get('username')

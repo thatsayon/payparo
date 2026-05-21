@@ -6,9 +6,25 @@ import cloudinary
 User = get_user_model()
 
 class UserSimpleSerializer(serializers.ModelSerializer):
+    profile_pic = serializers.SerializerMethodField()
+
     class Meta:
         model = User
         fields = ['id', 'username', 'full_name', 'profile_pic']
+
+    def get_profile_pic(self, obj):
+        if not obj.profile_pic:
+            return None
+        try:
+            # CloudinaryField exposes a .url property that returns the full HTTPS URL
+            return obj.profile_pic.url
+        except Exception:
+            # Fallback: build the URL manually from the stored public_id
+            try:
+                import cloudinary
+                return cloudinary.CloudinaryImage(str(obj.profile_pic)).build_url(secure=True)
+            except Exception:
+                return None
 
 class MessageSerializer(serializers.ModelSerializer):
     sender_info = UserSimpleSerializer(source='sender', read_only=True)
@@ -28,10 +44,14 @@ class MessageSerializer(serializers.ModelSerializer):
         if not obj.image:
             return None
         try:
-            # CloudinaryField stores the public_id; build a full URL from it
-            return cloudinary.CloudinaryImage(str(obj.image)).build_url(secure=True)
+            # CloudinaryField .url returns the full HTTPS URL
+            return obj.image.url
         except Exception:
-            return str(obj.image)  # fallback: return raw value
+            try:
+                import cloudinary
+                return cloudinary.CloudinaryImage(str(obj.image)).build_url(secure=True)
+            except Exception:
+                return None
 
     def get_reply_to_info(self, obj):
         if obj.reply_to:
@@ -61,7 +81,7 @@ class ConversationSerializer(serializers.ModelSerializer):
         fields = ['id', 'participants', 'title', 'is_dispute', 'created_at', 'updated_at', 'last_message', 'unread_count']
 
     def get_last_message(self, obj):
-        last_msg = obj.messages.last()
+        last_msg = obj.messages.order_by('-created_at').first()
         if last_msg:
             return MessageSerializer(last_msg).data
         return None

@@ -6,7 +6,8 @@ from rest_framework.response import Response
 from django.contrib.auth import get_user_model
 from django.db import transaction
 
-from .models import Invitation
+from .models import Invitation, KYCSubmission
+from .serializers import AdminKYCSubmissionSerializer
 import uuid
 
 User = get_user_model()
@@ -211,3 +212,70 @@ class AcceptInviteView(APIView):
             "success": True,
             "message": "Account created successfully. You can now log in."
         }, status=status.HTTP_201_CREATED)
+
+class PendingKYCPagination(PageNumberPagination):
+    page_size = 10
+    page_size_query_param = "page_size"
+    max_page_size = 100
+
+class PendingKYCListView(APIView):
+    permission_classes = [IsAdminUser]
+
+    def get(self, request):
+        status_param = request.query_params.get("status")
+        queryset = KYCSubmission.objects.all().order_by("-submitted_at")
+        
+        if status_param in [KYCSubmission.Status.PENDING, KYCSubmission.Status.UNDER_REVIEW, KYCSubmission.Status.APPROVED, KYCSubmission.Status.REJECTED]:
+            queryset = queryset.filter(status=status_param)
+        else:
+            # Default to pending and under review
+            queryset = queryset.filter(status__in=[KYCSubmission.Status.PENDING, KYCSubmission.Status.UNDER_REVIEW])
+
+        paginator = PendingKYCPagination()
+        page = paginator.paginate_queryset(queryset, request)
+        serializer = AdminKYCSubmissionSerializer(page, many=True)
+        return paginator.get_paginated_response(serializer.data)
+
+
+class KYCApprovalView(APIView):
+    permission_classes = [IsAdminUser]
+
+    def post(self, request, id):
+        action = request.data.get("action")
+        reason = request.data.get("reason", "")
+
+        if action not in ["approve", "reject"]:
+            return Response({"error": "Invalid action. Must be 'approve' or 'reject'."}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            submission = KYCSubmission.objects.get(id=id)
+        except KYCSubmission.DoesNotExist:
+            return Response({"error": "KYC submission not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        if submission.status in [KYCSubmission.Status.APPROVED, KYCSubmission.Status.REJECTED]:
+            return Response({"error": f"This submission has already been {submission.status}."}, status=status.HTTP_400_BAD_REQUEST)
+
+        from django.utils import timezone
+
+        with transaction.atomic():
+            if action == "approve":
+                submission.status = KYCSubmission.Status.APPROVED
+                submission.reviewed_at = timezone.now()
+                submission.save()
+
+                # Depending on business logic, we could update user role or status here.
+                # E.g. user.is_kyc_verified = True (if such field existed)
+
+            elif action == "reject":
+                if not reason.strip():
+                    return Response({"error": "A reason is required when rejecting."}, status=status.HTTP_400_BAD_REQUEST)
+                submission.status = KYCSubmission.Status.REJECTED
+                submission.rejection_reason = reason
+                submission.reviewed_at = timezone.now()
+                submission.save()
+
+        return Response({
+            "success": True,
+            "message": f"KYC submission successfully {submission.status}.",
+            "status": submission.status
+        }, status=status.HTTP_200_OK)

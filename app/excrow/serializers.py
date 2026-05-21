@@ -2,7 +2,7 @@ from rest_framework import serializers
 from django.contrib.auth import get_user_model
 from django.db import transaction
 
-from .models import Escrow, EscrowInstallment, EscrowImage, EscrowDocument, EscrowStatusHistory, EscrowDispute, EscrowDisputeImage, EscrowRating
+from .models import Escrow, EscrowInstallment, EscrowImage, EscrowDocument, EscrowStatusHistory, EscrowDispute, EscrowDisputeImage, EscrowRating, EscrowDeliveryProof
 from app.administration.models import FeeConfiguration
 
 User = get_user_model()
@@ -336,6 +336,31 @@ class EscrowListSerializer(serializers.ModelSerializer):
         return obj.created_by_id == request.user.id
 
 
+class EscrowDeliveryProofSerializer(serializers.ModelSerializer):
+    url = serializers.SerializerMethodField()
+    name = serializers.SerializerMethodField()
+
+    class Meta:
+        model = EscrowDeliveryProof
+        fields = ["id", "url", "name", "created_at"]
+
+    def get_url(self, obj):
+        if obj.file:
+            return obj.file.url
+        return None
+
+    def get_name(self, obj):
+        if obj.file:
+            try:
+                # CloudinaryResource usually has public_id
+                public_id = getattr(obj.file, 'public_id', None)
+                if public_id:
+                    return f"{public_id.split('/')[-1]}.{obj.file.format}" if hasattr(obj.file, 'format') else public_id.split('/')[-1]
+            except Exception:
+                pass
+        return "Delivery Proof"
+
+
 class EscrowDetailSerializer(serializers.ModelSerializer):
     """Full serializer for detail view including nested data."""
     created_by   = ReceiverSerializer(read_only=True)
@@ -343,6 +368,7 @@ class EscrowDetailSerializer(serializers.ModelSerializer):
     images       = EscrowImageSerializer(many=True, read_only=True)
     documents    = EscrowDocumentSerializer(many=True, read_only=True)
     installments = EscrowInstallmentSerializer(many=True, read_only=True)
+    delivery_proofs = EscrowDeliveryProofSerializer(many=True, read_only=True)
     status_history = EscrowStatusHistorySerializer(many=True, read_only=True)
     dispute = EscrowDisputeSerializer(read_only=True)
     user_role = serializers.SerializerMethodField()
@@ -354,7 +380,7 @@ class EscrowDetailSerializer(serializers.ModelSerializer):
             "id", "order_id", "product_name", "role", "user_role", "is_creator", "item_type",
             "payment_option", "price", "fee_amount", "total_amount", "currency", "status",
             "description", "created_by", "receiver",
-            "images", "documents", "installments", "status_history", "dispute",
+            "images", "documents", "installments", "delivery_proofs", "status_history", "dispute",
             "created_at", "updated_at",
         ]
 
@@ -416,6 +442,9 @@ class OrderHistoryDetailSerializer(serializers.ModelSerializer):
     created_by = ReceiverSerializer(read_only=True)
     receiver   = ReceiverSerializer(read_only=True)
     images     = EscrowImageSerializer(many=True, read_only=True)
+    documents  = EscrowDocumentSerializer(many=True, read_only=True)
+    installments = EscrowInstallmentSerializer(many=True, read_only=True)
+    delivery_proofs = EscrowDeliveryProofSerializer(many=True, read_only=True)
     cover_image = serializers.SerializerMethodField()
     status_history = EscrowStatusHistorySerializer(many=True, read_only=True)
     dispute = EscrowDisputeSerializer(read_only=True)
@@ -428,8 +457,8 @@ class OrderHistoryDetailSerializer(serializers.ModelSerializer):
     class Meta:
         model = Escrow
         fields = [
-            "id", "order_id", "product_name", "price", 
-            "created_by", "receiver", "images", "cover_image", 
+            "id", "order_id", "product_name", "description", "price", 
+            "created_by", "receiver", "images", "documents", "installments", "delivery_proofs", "cover_image", 
             "status", "status_history", "dispute", "created_at",
             "user_role", "is_creator", "available_actions",
             "dispute_deadline", "can_dispute"
@@ -527,35 +556,47 @@ class OrderHistoryDetailSerializer(serializers.ModelSerializer):
 
         # ── BUYER PARTY ────────────────────────────────────────────
         if user.id == buyer_user_id:
-            if s == Escrow.Status.CREATED and user.id != obj.receiver_id:
-                actions.append({
-                    "action":  "delivered",
-                    "label":   "Mark as Delivered",
-                    "enabled": False,
-                    "message": "Waiting for the seller to accept and ship the order.",
-                })
-            elif s == Escrow.Status.ACCEPTED:
-                actions.append({
-                    "action":  "delivered",
-                    "label":   "Mark as Delivered",
-                    "enabled": False,
-                    "message": "Waiting for the seller to ship the product.",
-                })
-            elif s == Escrow.Status.IN_PROGRESS:
-                actions.append({
-                    "action":  "delivered",
-                    "label":   "Mark as Delivered",
-                    "enabled": True,
-                    "message": None,
-                })
-            elif s == Escrow.Status.DELIVERED:
-                can_dispute = obj.can_dispute
-                actions.append({
-                    "action":  "dispute",
-                    "label":   "Dispute",
-                    "enabled": can_dispute,
-                    "message": None if can_dispute else "The 24-hour dispute window has expired.",
-                })
+            if obj.payment_option == Escrow.PaymentOption.INSTALLMENT:
+                # For installment payments, buyer releases installments individually.
+                # No whole-escrow "delivered" button is shown.
+                if s == Escrow.Status.DELIVERED:
+                    can_dispute = obj.can_dispute
+                    actions.append({
+                        "action":  "dispute",
+                        "label":   "Dispute",
+                        "enabled": can_dispute,
+                        "message": None if can_dispute else "The 24-hour dispute window has expired.",
+                    })
+            else:
+                if s == Escrow.Status.CREATED and user.id != obj.receiver_id:
+                    actions.append({
+                        "action":  "delivered",
+                        "label":   "Mark as Delivered",
+                        "enabled": False,
+                        "message": "Waiting for the seller to accept and ship the order.",
+                    })
+                elif s == Escrow.Status.ACCEPTED:
+                    actions.append({
+                        "action":  "delivered",
+                        "label":   "Mark as Delivered",
+                        "enabled": False,
+                        "message": "Waiting for the seller to ship the product.",
+                    })
+                elif s == Escrow.Status.IN_PROGRESS:
+                    actions.append({
+                        "action":  "delivered",
+                        "label":   "Mark as Delivered",
+                        "enabled": True,
+                        "message": None,
+                    })
+                elif s == Escrow.Status.DELIVERED:
+                    can_dispute = obj.can_dispute
+                    actions.append({
+                        "action":  "dispute",
+                        "label":   "Dispute",
+                        "enabled": can_dispute,
+                        "message": None if can_dispute else "The 24-hour dispute window has expired.",
+                    })
 
         return actions
 

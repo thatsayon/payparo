@@ -381,3 +381,21 @@ class EscrowRating(BaseModel):
 
     def __str__(self):
         return f"{self.rated_by.username} rated {self.rated_user.username} {self.stars}★ on escrow #{self.escrow.order_id}"
+
+
+class EscrowDeliveryProof(BaseModel):
+    """
+    Optional proof of delivery (photos or documents) uploaded by the seller when marking an escrow as sent.
+    """
+    escrow = models.ForeignKey(
+        Escrow,
+        on_delete=models.CASCADE,
+        related_name="delivery_proofs"
+    )
+    file = CloudinaryField(resource_type="auto")
+    
+    class Meta:
+        ordering = ["created_at"]
+
+    def __str__(self):
+        return f"Delivery Proof for Escrow #{self.escrow_id}"

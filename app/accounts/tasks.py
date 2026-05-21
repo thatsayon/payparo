@@ -60,6 +60,30 @@ def send_login_otp_task(email, name, otp):
 
 
 @shared_task(bind=True, max_retries=3, default_retry_delay=10)
+def send_2fa_email_task(self, email: str, full_name: str, otp: str):
+    """Send a 2FA login OTP email. Distinct from registration/password-reset emails."""
+    subject = "Payparo — Login Verification Code"
+    message = (
+        f"Hi {full_name},\n\n"
+        f"Your two-factor authentication code is: {otp}\n\n"
+        f"This code expires in 5 minutes.\n\n"
+        f"If you did not attempt to sign in, please change your password immediately.\n\n"
+        f"— Payparo Team"
+    )
+    try:
+        send_mail(
+            subject,
+            message,
+            settings.DEFAULT_FROM_EMAIL,
+            [email],
+            fail_silently=False,
+        )
+    except Exception as exc:
+        raise self.retry(exc=exc)
+
+
+
+@shared_task(bind=True, max_retries=3, default_retry_delay=10)
 def send_kyc_invitation_email_task(self, email: str, invitation_link: str):
     """Send KYC specialist invitation email with a registration link."""
     subject = "Payparo — You're Invited to Join as a KYC Specialist"

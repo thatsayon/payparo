@@ -3,6 +3,7 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.parsers import MultiPartParser, FormParser
 
+from django.db import transaction
 from django.db.models import Q
 from django.contrib.auth import get_user_model
 
@@ -94,12 +95,16 @@ class EscrowListCreateView(APIView):
         data = request.data
         
         # 1. Required fields validation
-        required_fields = ['role', 'item_type', 'product_name', 'description', 'payment_option', 'price', 'fee_amount']
+        required_fields = ['role', 'item_type', 'product_name', 'description', 'payment_option', 'fee_amount']
         
         missing = []
         for field in required_fields:
             if not data.get(field):
                 missing.append(field)
+                
+        payment_option = data.get('payment_option')
+        if payment_option == Escrow.PaymentOption.SINGLE and not data.get('price'):
+            missing.append('price')
                 
         receiver_username = data.get('receiver_username') or data.get('receiver')
         if not receiver_username:
@@ -168,7 +173,22 @@ class EscrowListCreateView(APIView):
                 return Response({"error": "At least one installment amount is required for Custom Installments."}, status=status.HTTP_400_BAD_REQUEST)
                 
         try:
+            total_amount_val = float(total_amount)
+        except (ValueError, TypeError):
+            return Response({"error": "Invalid total amount."}, status=status.HTTP_400_BAD_REQUEST)
+
+        if data.get('role') == Escrow.Role.BUYER:
+            wallet = getattr(request.user, "wallet", None)
+            if not wallet or float(wallet.balance) < total_amount_val:
+                return Response({"error": "Insufficient wallet balance to fund this escrow. Please add funds to your wallet."}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
             with transaction.atomic():
+                if data.get('role') == Escrow.Role.BUYER:
+                    wallet = request.user.wallet
+                    wallet.balance = float(wallet.balance) - total_amount_val
+                    wallet.save(update_fields=["balance", "updated_at"])
+
                 escrow = Escrow.objects.create(
                     created_by=request.user,
                     receiver=receiver,
@@ -212,6 +232,14 @@ class EscrowListCreateView(APIView):
             event_type="escrow_created",
             reference_id=str(escrow.id)
         )
+
+        if escrow.role == Escrow.Role.BUYER:
+            try:
+                from app.excrow.tasks import expire_unaccepted_buyer_escrow
+                expire_unaccepted_buyer_escrow.apply_async(args=[str(escrow.id)], countdown=86400)
+            except Exception as exc:
+                import logging
+                logging.getLogger("app").warning("Could not enqueue expiration task for %s: %s", escrow.id, exc)
 
         return Response(
             {
@@ -382,8 +410,21 @@ class EscrowAcceptView(APIView):
         if escrow.status != Escrow.Status.CREATED:
             return Response({"error": f"Escrow cannot be accepted from '{escrow.get_status_display()}' state."}, status=status.HTTP_400_BAD_REQUEST)
 
-        escrow.status = Escrow.Status.ACCEPTED
-        escrow.save()
+        if escrow.role == Escrow.Role.SELLER:
+            wallet = getattr(request.user, "wallet", None)
+            total_amount_val = float(escrow.total_amount)
+            if not wallet or float(wallet.balance) < total_amount_val:
+                return Response({"error": "Insufficient wallet balance to accept this escrow. Please add funds to your wallet."}, status=status.HTTP_400_BAD_REQUEST)
+
+        from django.db import transaction
+        with transaction.atomic():
+            if escrow.role == Escrow.Role.SELLER:
+                wallet = request.user.wallet
+                wallet.balance = float(wallet.balance) - float(escrow.total_amount)
+                wallet.save(update_fields=["balance", "updated_at"])
+
+            escrow.status = Escrow.Status.ACCEPTED
+            escrow.save()
 
         from app.notification.utils import send_notification
         send_notification(
@@ -428,8 +469,18 @@ class EscrowSendProductView(APIView):
         if escrow.status != Escrow.Status.ACCEPTED:
             return Response({"error": f"Product can only be sent when status is 'Accepted'. Current: '{escrow.get_status_display()}'."}, status=status.HTTP_400_BAD_REQUEST)
 
-        escrow.status = Escrow.Status.IN_PROGRESS
-        escrow.save()
+        from app.excrow.models import EscrowDeliveryProof
+        from django.db import transaction
+        
+        with transaction.atomic():
+            escrow.status = Escrow.Status.IN_PROGRESS
+            escrow.save()
+            
+            proofs = request.FILES.getlist("proofs") or request.FILES.getlist("proofs[]")
+            if proofs:
+                EscrowDeliveryProof.objects.bulk_create([
+                    EscrowDeliveryProof(escrow=escrow, file=f) for f in proofs
+                ])
 
         buyer_user = escrow.receiver if escrow.role == Escrow.Role.SELLER else escrow.created_by
         from app.notification.utils import send_notification
@@ -960,5 +1011,76 @@ class EscrowRatingView(APIView):
             rating = EscrowRating.objects.select_related('rated_by', 'rated_user').get(escrow_id=pk, rated_by=request.user)
         except EscrowRating.DoesNotExist:
             return Response({"rating": None}, status=status.HTTP_200_OK)
+        
+        return Response({
+            "rating": EscrowRatingReadSerializer(rating).data
+        }, status=status.HTTP_200_OK)
 
-        return Response({"rating": EscrowRatingReadSerializer(rating).data})
+
+# ──────────────────────────────────────────────
+# Release Installment
+# ──────────────────────────────────────────────
+
+class EscrowReleaseInstallmentView(APIView):
+    """
+    POST /api/escrow/installments/<pk>/release/
+    Allows the buyer to release an unpaid installment to the seller.
+    """
+    permission_classes = [permissions.IsAuthenticated]
+
+    @transaction.atomic
+    def post(self, request, pk):
+        from django.utils import timezone
+        
+        try:
+            installment = EscrowInstallment.objects.select_related("escrow").get(pk=pk)
+        except EscrowInstallment.DoesNotExist:
+            return Response({"error": "Installment not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        escrow = installment.escrow
+        user = request.user
+
+        buyer_id = escrow.created_by_id if escrow.role == Escrow.Role.BUYER else escrow.receiver_id
+
+        if user.id != buyer_id:
+            return Response({"error": "Only the buyer can release installments."}, status=status.HTTP_403_FORBIDDEN)
+
+        if installment.is_paid:
+            return Response({"error": "This installment is already released."}, status=status.HTTP_400_BAD_REQUEST)
+        
+        if escrow.status != Escrow.Status.IN_PROGRESS:
+            return Response({"error": "You can only release installments after the seller has sent the product."}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Enforce sequential release
+        previous_unpaid = EscrowInstallment.objects.filter(
+            escrow=escrow,
+            order__lt=installment.order,
+            is_paid=False
+        ).exists()
+
+        if previous_unpaid:
+            return Response({"error": "You must release previous installments first."}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Release
+        installment.is_paid = True
+        installment.paid_at = timezone.now()
+        installment.save()
+
+        # Check if all installments are paid
+        all_paid = not EscrowInstallment.objects.filter(escrow=escrow, is_paid=False).exists()
+        
+        if all_paid:
+            # Active release implies acceptance. Move straight to completed.
+            escrow.status = Escrow.Status.COMPLETED
+            escrow.save()
+            EscrowStatusHistory.objects.create(escrow=escrow, status=Escrow.Status.COMPLETED)
+        else:
+            # Revert to ACCEPTED so the seller has to "Send Product" again for the next installment
+            escrow.status = Escrow.Status.ACCEPTED
+            escrow.save()
+            EscrowStatusHistory.objects.create(escrow=escrow, status=Escrow.Status.ACCEPTED)
+
+        return Response({
+            "success": True, 
+            "message": "Installment released successfully."
+        }, status=status.HTTP_200_OK)

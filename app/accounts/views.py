@@ -322,20 +322,15 @@ class LoginView(APIView):
             )
 
         if user.two_factor_enabled:
-            # Generate 2FA token and OTP
-            from .tasks import send_confirmation_email_task
-            send_task = send_confirmation_email_task
-            if user.two_factor_method == "sms":
-                # Fallback to email for now as SMS isn't implemented
-                send_task = send_confirmation_email_task
-
-            token = _create_and_send_otp(user, send_task, purpose="2fa_login")
+            # Always use email for 2FA — SMS is not supported
+            from .tasks import send_2fa_email_task
+            token = _create_and_send_otp(user, send_2fa_email_task, purpose="2fa_login")
             return Response(
                 {
                     "requires_2fa": True,
-                    "method": user.two_factor_method or "email",
+                    "method": "email",
                     "two_factor_token": token,
-                    "message": "Please enter the OTP sent to your registered communication method."
+                    "message": "A verification code has been sent to your email."
                 },
                 status=status.HTTP_200_OK,
             )
@@ -639,7 +634,8 @@ class RefreshAccessTokenView(APIView):
 
 class Toggle2FAView(APIView):
     """
-    Authenticated user can turn 2FA on/off and choose the method (email/sms/both).
+    Authenticated user can turn email-based 2FA on or off.
+    Only email delivery is supported; method is always 'email'.
     """
     permission_classes = [permissions.IsAuthenticated]
 
@@ -652,26 +648,9 @@ class Toggle2FAView(APIView):
             )
 
         enable = serializer.validated_data["enable"]
-        method = serializer.validated_data.get("method")
-
         user = request.user
         user.two_factor_enabled = enable
-        
-        if enable:
-            if not method:
-                return Response(
-                    {"error": "A 2FA method (email/sms/both) is required when enabling 2FA."},
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
-            
-            if method in ["sms", "both"] and not user.phone_number:
-                return Response(
-                    {"error": "Phone number is required for SMS 2FA."},
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
-            
-            user.two_factor_method = method
-
+        user.two_factor_method = "email" if enable else None
         user.save(update_fields=["two_factor_enabled", "two_factor_method"])
 
         return Response(
@@ -679,10 +658,54 @@ class Toggle2FAView(APIView):
                 "success": True,
                 "message": f"2FA has been {'enabled' if enable else 'disabled'}.",
                 "two_factor_enabled": user.two_factor_enabled,
-                "two_factor_method": user.two_factor_method
+                "two_factor_method": user.two_factor_method,
             },
             status=status.HTTP_200_OK,
         )
+
+
+class Resend2FALoginOTPView(APIView):
+    """
+    Resend the 2FA login OTP using the two_factor_token issued by LoginView.
+    Returns a fresh two_factor_token so the client can continue the flow.
+    """
+    permission_classes = [permissions.AllowAny]
+
+    def post(self, request):
+        token = request.data.get("two_factor_token")
+        if not token:
+            return Response(
+                {"error": "two_factor_token is required."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        decoded = decode_otp_token(token)
+        if not decoded or decoded.get("purpose") != "2fa_login":
+            return Response(
+                {"error": "Invalid or expired 2FA token."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            user = User.objects.get(id=decoded["user_id"])
+        except User.DoesNotExist:
+            return Response(
+                {"error": "User not found."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        from .tasks import send_2fa_email_task
+        new_token = _create_and_send_otp(user, send_2fa_email_task, purpose="2fa_login")
+
+        return Response(
+            {
+                "success": True,
+                "message": "A new OTP has been sent to your email.",
+                "two_factor_token": new_token,
+            },
+            status=status.HTTP_200_OK,
+        )
+
 
 class UpdatePasswordView(APIView):
     """Change password for the authenticated user."""

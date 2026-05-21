@@ -107,6 +107,7 @@ class ProfileHomeSerializer(serializers.ModelSerializer):
             'full_name',
             'profile_pic',
             'kyc_status',
+            'two_factor_enabled',
             'total_completed_escrows',
             'rating'
         )
