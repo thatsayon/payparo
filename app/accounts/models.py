@@ -182,6 +182,15 @@ class UserAccount(AbstractBaseUser, PermissionsMixin, BaseModel):
             return latest_submission.status
         return "not_submitted"
 
+    @property
+    def is_subscribed(self) -> bool:
+        from django.utils import timezone
+        try:
+            sub = self.subscription
+            return sub.is_active and sub.active_until > timezone.now()
+        except Exception:
+            return False
+
     def __str__(self):
         return self.email
 
@@ -298,3 +307,25 @@ class Invitation(BaseModel):
 
     def __str__(self):
         return f"Invitation for {self.email} ({self.role})"
+
+
+class UserSubscription(BaseModel):
+    class PlanType(models.TextChoices):
+        MONTHLY = "monthly", "Monthly ($2/mo)"
+        YEARLY  = "yearly",  "Yearly ($22/yr)"
+
+    user = models.OneToOneField(
+        UserAccount,
+        on_delete=models.CASCADE,
+        related_name="subscription"
+    )
+    plan = models.CharField(
+        max_length=10,
+        choices=PlanType.choices,
+    )
+    stripe_session_id = models.CharField(max_length=255, blank=True, null=True)
+    active_until = models.DateTimeField()
+    is_active = models.BooleanField(default=True)
+
+    def __str__(self):
+        return f"{self.user.email} - {self.plan} (Until {self.active_until})"

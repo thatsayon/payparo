@@ -725,3 +725,27 @@ class AdminDashboardOverviewView(APIView):
         return Response(response_data, status=status.HTTP_200_OK)
 
 
+class MarketingBannerListCreateView(generics.ListCreateAPIView):
+    from app.administration.models import MarketingBanner
+    from .serializers import MarketingBannerSerializer
+
+    queryset = MarketingBanner.objects.all().order_by("-created_at")
+    serializer_class = MarketingBannerSerializer
+    pagination_class = None
+
+    def get_permissions(self):
+        if self.request.method == "GET":
+            return [permissions.IsAuthenticated()]
+        return [permissions.IsAdminUser()]
+
+
+class MarketingBannerDestroyView(generics.DestroyAPIView):
+    from app.administration.models import MarketingBanner
+    from .serializers import MarketingBannerSerializer
+
+    queryset = MarketingBanner.objects.all()
+    serializer_class = MarketingBannerSerializer
+    permission_classes = [permissions.IsAdminUser]
+
+
+

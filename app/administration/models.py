@@ -22,3 +22,19 @@ class FeeConfiguration(BaseModel):
         verbose_name = "Fee Configuration"
         verbose_name_plural = "Fee Configurations"
 
+
+class MarketingBanner(BaseModel):
+    from cloudinary.models import CloudinaryField
+    title = models.CharField(max_length=255, blank=True, null=True, help_text="Optional banner title")
+    image = CloudinaryField(resource_type="image", help_text="Cloudinary image upload for marketing banner")
+    link = models.URLField(max_length=500, blank=True, null=True, help_text="Link to open when banner is clicked")
+
+    class Meta:
+        ordering = ["-created_at"]
+        verbose_name = "Marketing Banner"
+        verbose_name_plural = "Marketing Banners"
+
+    def __str__(self):
+        return self.title or f"Banner {self.id}"
+
+

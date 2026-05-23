@@ -14,6 +14,8 @@ from .views import (
     AdminWithdrawRequestStatusUpdateView,
     AdminRevenueView,
     AdminDashboardOverviewView,
+    MarketingBannerListCreateView,
+    MarketingBannerDestroyView,
 )
 
 urlpatterns = [
@@ -30,4 +32,6 @@ urlpatterns = [
     path("withdraw-requests/", AdminWithdrawRequestListView.as_view(), name="admin-withdraw-list"),
     path("withdraw-requests/<uuid:pk>/status/", AdminWithdrawRequestStatusUpdateView.as_view(), name="admin-withdraw-status-update"),
     path("revenue/", AdminRevenueView.as_view(), name="admin-revenue"),
+    path("marketing/", MarketingBannerListCreateView.as_view(), name="marketing-list-create"),
+    path("marketing/<uuid:pk>/", MarketingBannerDestroyView.as_view(), name="marketing-destroy"),
 ]

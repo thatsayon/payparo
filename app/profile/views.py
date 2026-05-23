@@ -464,6 +464,8 @@ class StripeWebhookView(APIView):
             self._handle_success(data_object)
         elif event_type == "payment_intent.payment_failed":
             self._handle_failure(data_object)
+        elif event_type == "checkout.session.completed":
+            self._handle_checkout_completed(data_object)
 
         return Response({"received": True}, status=status.HTTP_200_OK)
 
@@ -517,6 +519,49 @@ class StripeWebhookView(APIView):
         txn.status = WalletTransaction.Status.FAILED
         txn.save(update_fields=["status", "updated_at"])
         logger.info("Transaction %s marked FAILED (PI: %s)", txn.id, pi_id)
+
+    @staticmethod
+    def _handle_checkout_completed(session):
+        metadata = session.get("metadata", {}) if isinstance(session, dict) else getattr(session, "metadata", {})
+        if not metadata or metadata.get("type") != "subscription":
+            return
+
+        user_id = metadata.get("user_id")
+        plan = metadata.get("plan")
+        session_id = session.get("id") if isinstance(session, dict) else getattr(session, "id", None)
+
+        from app.accounts.models import UserAccount, UserSubscription
+        from django.utils import timezone
+        from datetime import timedelta
+
+        try:
+            user = UserAccount.objects.get(id=user_id)
+        except UserAccount.DoesNotExist:
+            logger.warning("Webhook subscription: user not found for ID %s", user_id)
+            return
+
+        if plan == "monthly":
+            duration = timedelta(days=30)
+        else:
+            duration = timedelta(days=365)
+
+        active_until = timezone.now() + duration
+
+        with db_transaction.atomic():
+            sub, _ = UserSubscription.objects.update_or_create(
+                user=user,
+                defaults={
+                    "plan": plan,
+                    "stripe_session_id": session_id,
+                    "active_until": active_until,
+                    "is_active": True
+                }
+            )
+
+        logger.info(
+            "User %s subscription activated. Plan: %s, active until: %s",
+            user.email, plan, active_until
+        )
 
 
 # ──────────────────────────────────────────────
@@ -713,6 +758,156 @@ class BankWithdrawHistoryView(APIView):
                 "next": paginator.get_next_link(),
                 "previous": paginator.get_previous_link(),
                 "results": serializer.data,
+            },
+            status=status.HTTP_200_OK,
+        )
+
+
+class CreateSubscriptionSessionView(APIView):
+    """
+    POST — Create a Stripe Checkout Session for subscription paywall.
+    Accepts: { "plan": "monthly" | "yearly" }
+    """
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request):
+        plan = request.data.get("plan", "monthly").lower()
+        if plan not in ("monthly", "yearly"):
+            return Response({"error": "plan must be 'monthly' or 'yearly'."}, status=status.HTTP_400_BAD_REQUEST)
+
+        # 50% discount if payment yearly:
+        # Monthly is $2 USD (lasts 30 days)
+        # Yearly is $12 USD (lasts 365 days)
+        if plan == "monthly":
+            amount_cents = 200  # $2.00
+            plan_name = "Monthly Subscription Plan"
+        else:
+            amount_cents = 1200  # $12.00
+            plan_name = "Yearly Subscription Plan (50% Off)"
+
+        # We can dynamically point to the frontend referrer or use default localhost
+        referer = request.META.get("HTTP_REFERER")
+        if referer:
+            from urllib.parse import urlparse
+            parsed = urlparse(referer)
+            base_url = f"{parsed.scheme}://{parsed.netloc}"
+        else:
+            base_url = "http://localhost:3000"
+
+        success_url = f"{base_url}/dashboard/escrows?subscription=success"
+        cancel_url = f"{base_url}/dashboard/escrows?subscription=cancel"
+
+        try:
+            session = stripe.checkout.Session.create(
+                payment_method_types=["card"],
+                line_items=[
+                    {
+                        "price_data": {
+                            "currency": "usd",
+                            "product_data": {
+                                "name": plan_name,
+                                "description": "Access unlimited escrows on PayParo",
+                            },
+                            "unit_amount": amount_cents,
+                        },
+                        "quantity": 1,
+                    }
+                ],
+                mode="payment",
+                metadata={
+                    "user_id": str(request.user.id),
+                    "plan": plan,
+                    "type": "subscription",
+                },
+                success_url=success_url,
+                cancel_url=cancel_url,
+            )
+            return Response(
+                {
+                    "success": True,
+                    "checkout_url": session.url,
+                    "session_id": session.id,
+                },
+                status=status.HTTP_200_OK,
+            )
+        except stripe.error.StripeError as e:
+            logger.error("Stripe error creating Checkout Session: %s", e)
+            return Response(
+                {"error": "Payment checkout service currently unavailable."},
+                status=status.HTTP_502_BAD_GATEWAY,
+            )
+
+
+class UserSubscriptionStatusView(APIView):
+    """
+    GET — Retrieve the current user's subscription status, active until,
+    and number of escrows created.
+    POST — Directly activate subscription via local app SDK payment.
+    """
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        from app.excrow.models import Escrow
+        from django.utils import timezone
+
+        user = request.user
+        created_count = Escrow.objects.filter(created_by=user).count()
+
+        is_sub = user.is_subscribed
+        sub_details = None
+
+        try:
+            sub = user.subscription
+            sub_details = {
+                "plan": sub.plan,
+                "active_until": sub.active_until,
+                "is_active": sub.is_active and sub.active_until > timezone.now(),
+            }
+        except Exception:
+            pass
+
+        return Response(
+            {
+                "success": True,
+                "is_subscribed": is_sub,
+                "created_escrow_count": created_count,
+                "subscription": sub_details,
+            },
+            status=status.HTTP_200_OK,
+        )
+
+    def post(self, request):
+        from app.accounts.models import UserSubscription
+        from app.excrow.models import Escrow
+        from django.utils import timezone
+        from datetime import timedelta
+
+        plan = request.data.get("plan", "monthly").lower()
+        if plan not in ("monthly", "yearly"):
+            return Response({"error": "plan must be 'monthly' or 'yearly'."}, status=status.HTTP_400_BAD_REQUEST)
+
+        days = 30 if plan == "monthly" else 365
+
+        user = request.user
+        sub, created = UserSubscription.objects.get_or_create(user=user)
+        sub.plan = plan
+        sub.active_until = timezone.now() + timedelta(days=days)
+        sub.is_active = True
+        sub.stripe_session_id = "in_app_payment_sdk"
+        sub.save()
+
+        created_count = Escrow.objects.filter(created_by=user).count()
+
+        return Response(
+            {
+                "success": True,
+                "is_subscribed": True,
+                "created_escrow_count": created_count,
+                "subscription": {
+                    "plan": sub.plan,
+                    "active_until": sub.active_until,
+                    "is_active": True,
+                }
             },
             status=status.HTTP_200_OK,
         )

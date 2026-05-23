@@ -415,7 +415,7 @@ class OrderHistorySerializer(serializers.ModelSerializer):
         model = Escrow
         fields = [
             "id", "order_id", "product_name", "status", "created_at",
-            "user_role", "is_creator", "created_by", "receiver"
+            "user_role", "is_creator", "created_by", "receiver", "item_type"
         ]
 
     def get_user_role(self, obj):
@@ -461,7 +461,7 @@ class OrderHistoryDetailSerializer(serializers.ModelSerializer):
             "created_by", "receiver", "images", "documents", "installments", "delivery_proofs", "cover_image", 
             "status", "status_history", "dispute", "created_at",
             "user_role", "is_creator", "available_actions",
-            "dispute_deadline", "can_dispute"
+            "dispute_deadline", "can_dispute", "item_type"
         ]
 
     def get_cover_image(self, obj):

@@ -92,6 +92,21 @@ class EscrowListCreateView(APIView):
 
     def post(self, request):
         print(request.data)
+        
+        # Paywall validation: allow 1st escrow for free, block subsequent if not subscribed
+        user = request.user
+        if not user.is_subscribed:
+            created_count = Escrow.objects.filter(created_by=user).count()
+            if created_count >= 1:
+                return Response(
+                    {
+                        "success": False,
+                        "error": "Subscription required to create more escrows.",
+                        "paywall_required": True
+                    },
+                    status=status.HTTP_402_PAYMENT_REQUIRED
+                )
+
         data = request.data
         
         # 1. Required fields validation
@@ -241,11 +256,19 @@ class EscrowListCreateView(APIView):
                 import logging
                 logging.getLogger("app").warning("Could not enqueue expiration task for %s: %s", escrow.id, exc)
 
+        # Determine if we should prompt for subscription (not subscribed and just created their 1st escrow)
+        ask_to_pay = False
+        if not request.user.is_subscribed:
+            created_count = Escrow.objects.filter(created_by=request.user).count()
+            if created_count <= 1:
+                ask_to_pay = True
+
         return Response(
             {
                 "success": True,
                 "message": "Escrow created successfully.",
                 "escrow":  EscrowDetailSerializer(escrow).data,
+                "ask_to_pay": ask_to_pay,
             },
             status=status.HTTP_201_CREATED,
         )

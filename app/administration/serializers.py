@@ -281,3 +281,22 @@ class AdminWithdrawRequestListSerializer(serializers.ModelSerializer):
             except Exception:
                 pass
         return None
+
+
+class MarketingBannerSerializer(serializers.ModelSerializer):
+    image_url = serializers.SerializerMethodField()
+
+    class Meta:
+        from app.administration.models import MarketingBanner
+        model = MarketingBanner
+        fields = ("id", "title", "image", "image_url", "link", "created_at", "updated_at")
+        read_only_fields = ("id", "image_url", "created_at", "updated_at")
+
+    def get_image_url(self, obj):
+        if obj.image:
+            try:
+                return obj.image.url
+            except AttributeError:
+                return str(obj.image)
+        return None
+
