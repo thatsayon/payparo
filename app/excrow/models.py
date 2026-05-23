@@ -38,6 +38,7 @@ class Escrow(BaseModel):
         DISPUTE_IN_PROGRESS = "dispute_in_progress", "Dispute In Progress"
         RETURN_IN_PROGRESS = "return_in_progress", "Return In Progress"
         RESOLVED           = "resolved",           "Resolved"
+        DISPUTE_RESOLVED   = "dispute_resolved",   "Dispute Resolved"
         REFUNDED           = "refunded",           "Refunded"
         PAYMENT_RELEASED   = "payment_released",   "Payment Released"
         COMPLETED          = "completed",          "Completed"

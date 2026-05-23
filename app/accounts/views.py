@@ -756,18 +756,6 @@ class KYCUploadIDCardView(APIView):
     parser_classes = [MultiPartParser, FormParser]
 
     def post(self, request):
-        if KYCSubmission.objects.filter(user=request.user, status=KYCSubmission.Status.APPROVED).exists():
-            return Response(
-                {"error": "KYC is already approved."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-            
-        if KYCSubmission.objects.filter(user=request.user, status=KYCSubmission.Status.UNDER_REVIEW).exists():
-            return Response(
-                {"error": "KYC is currently under review."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
         serializer = IDCardUploadSerializer(data=request.data)
         if not serializer.is_valid():
             return Response(
@@ -781,10 +769,12 @@ class KYCUploadIDCardView(APIView):
 
         import cloudinary.uploader
         with transaction.atomic():
-            submission, _ = KYCSubmission.objects.get_or_create(
-                user=request.user,
-                status=KYCSubmission.Status.PENDING,
-            )
+            submission = KYCSubmission.objects.filter(user=request.user).order_by("-created_at").first()
+            if not submission:
+                submission = KYCSubmission.objects.create(user=request.user, status=KYCSubmission.Status.PENDING)
+            else:
+                submission.status = KYCSubmission.Status.PENDING
+                submission.save(update_fields=["status"])
             
             # Remove any previously uploaded ID cards for this pending submission from Cloudinary and DB
             old_id_docs = KYCDocument.objects.filter(
@@ -904,6 +894,11 @@ class KYCPublishView(APIView):
                 },
             )
 
+            # Also update full name on the User model
+            user = request.user
+            user.full_name = data["full_name"]
+            user.save(update_fields=["full_name"])
+
             # Move submission to UNDER_REVIEW
             submission.status = KYCSubmission.Status.UNDER_REVIEW
             submission.save(update_fields=["status"])
@@ -946,18 +941,6 @@ class KYCUploadFaceView(APIView):
     parser_classes = [MultiPartParser, FormParser]
 
     def post(self, request):
-        if KYCSubmission.objects.filter(user=request.user, status=KYCSubmission.Status.APPROVED).exists():
-            return Response(
-                {"error": "KYC is already approved."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-            
-        if KYCSubmission.objects.filter(user=request.user, status=KYCSubmission.Status.UNDER_REVIEW).exists():
-            return Response(
-                {"error": "KYC is currently under review."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
         serializer = FaceImageUploadSerializer(data=request.data)
         if not serializer.is_valid():
             return Response(
@@ -973,10 +956,12 @@ class KYCUploadFaceView(APIView):
 
         import cloudinary.uploader
         with transaction.atomic():
-            submission, _ = KYCSubmission.objects.get_or_create(
-                user=request.user,
-                status=KYCSubmission.Status.PENDING,
-            )
+            submission = KYCSubmission.objects.filter(user=request.user).order_by("-created_at").first()
+            if not submission:
+                submission = KYCSubmission.objects.create(user=request.user, status=KYCSubmission.Status.PENDING)
+            else:
+                submission.status = KYCSubmission.Status.PENDING
+                submission.save(update_fields=["status"])
 
             # Remove previous face uploads for this submission from Cloudinary and DB
             old_docs = KYCDocument.objects.filter(

@@ -830,6 +830,10 @@ class KYCDisputeResolveView(APIView):
                 dispute.decision_reason = reason
             dispute.save()
 
+            # Update the associated escrow status
+            dispute.escrow.status = Escrow.Status.DISPUTE_RESOLVED
+            dispute.escrow.save()
+
         return Response({
             "success": True,
             "status": dispute.status,

@@ -238,6 +238,8 @@ class AdminWithdrawRequestListSerializer(serializers.ModelSerializer):
     user_email = serializers.EmailField(source="user.email", read_only=True)
     user_full_name = serializers.CharField(source="user.full_name", read_only=True)
     status_display = serializers.CharField(source="get_status_display", read_only=True)
+    account_number = serializers.SerializerMethodField()
+    routing_number = serializers.SerializerMethodField()
 
     class Meta:
         from app.profile.models import WithdrawTransaction
@@ -254,6 +256,8 @@ class AdminWithdrawRequestListSerializer(serializers.ModelSerializer):
             "paypal_email",
             "bank_name",
             "account_number_last4",
+            "account_number",
+            "routing_number",
             "transaction_ref",
             "status",
             "status_display",
@@ -261,3 +265,19 @@ class AdminWithdrawRequestListSerializer(serializers.ModelSerializer):
             "created_at",
         )
         read_only_fields = fields
+
+    def get_account_number(self, obj):
+        if obj.method == "bank":
+            try:
+                return obj.user.bank_account.account_number
+            except Exception:
+                pass
+        return None
+
+    def get_routing_number(self, obj):
+        if obj.method == "bank":
+            try:
+                return obj.user.bank_account.routing_number
+            except Exception:
+                pass
+        return None
