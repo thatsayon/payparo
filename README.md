@@ -10,4 +10,3 @@ stripe listen --forward-to http://localhost:8100/api/profile/wallet/webhook/stri
 
 * Messaging system:
 - Webscoket
-- Socket
