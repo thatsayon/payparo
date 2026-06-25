@@ -102,7 +102,7 @@ ROOT_URLCONF = 'config.urls'
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [],
+        'DIRS': [BASE_DIR / 'templates'],
         'APP_DIRS': True,
         'OPTIONS': {
             'context_processors': [
@@ -254,10 +254,10 @@ EMAIL_PORT = 465
 EMAIL_USE_TLS = False
 EMAIL_USE_SSL = True
 
-EMAIL_HOST_USER = "no-reply@ovation-app.com"
-EMAIL_HOST_PASSWORD = "OvationAPP123!"
+EMAIL_HOST_USER = "no-reply@payparo.tech"
+EMAIL_HOST_PASSWORD = "Ayon28@gmail.com"
 
-DEFAULT_FROM_EMAIL = "no-reply@ovation-app.com"
+DEFAULT_FROM_EMAIL = "no-reply@payparo.tech"
 
 
 LOGGING = {
