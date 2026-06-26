@@ -254,7 +254,7 @@ EMAIL_PORT = 465
 EMAIL_USE_TLS = False
 EMAIL_USE_SSL = True
 
-EMAIL_HOST_USER = "no-reply@payparo.tech"
+EMAIL_HOST_USER = "hello@payparo.tech"
 EMAIL_HOST_PASSWORD = "Ayon28@gmail.com"
 
 DEFAULT_FROM_EMAIL = "no-reply@payparo.tech"
