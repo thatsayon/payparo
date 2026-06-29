@@ -46,70 +46,78 @@ class ChatConsumer(AsyncWebsocketConsumer):
             )
 
     async def receive(self, text_data):
-        data = json.loads(text_data)
-        message_type = data.get('type', 'message')
-        logger.info(f'📨 WebSocket RECEIVE | user={self.user.username} | type={message_type} | data={data}')
+        try:
+            data = json.loads(text_data)
+            message_type = data.get('type', 'message')
+            logger.info(f'📨 WebSocket RECEIVE | user={self.user.username} | type={message_type} | data={data}')
 
-        if message_type == 'message':
-            body = data.get('body')
-            image_url = data.get('image_url')
-            reply_to_id = data.get('reply_to_id')
+            if message_type == 'message':
+                body = data.get('body')
+                image_url = data.get('image_url')
+                reply_to_id = data.get('reply_to_id')
 
-            # Check for block
-            is_blocked = await self.check_if_blocked()
-            if is_blocked:
-                await self.send(text_data=json.dumps({
-                    'type': 'error',
-                    'message': 'You cannot send messages to this user.'
-                }, cls=DjangoJSONEncoder))
-                return
+                # Check for block
+                is_blocked = await self.check_if_blocked()
+                if is_blocked:
+                    await self.send(text_data=json.dumps({
+                        'type': 'error',
+                        'message': 'You cannot send messages to this user.'
+                    }, cls=DjangoJSONEncoder))
+                    return
 
-            if not body and not image_url:
-                return
+                if not body and not image_url:
+                    return
 
-            # Save message
-            message = await self.save_message(body, image_url, reply_to_id)
-            if message is None:
-                await self.send(text_data=json.dumps({'type': 'error', 'message': 'Failed to save message'}))
-                return
-            serialized_message = await self.get_serialized_message(message)
+                # Save message
+                message = await self.save_message(body, image_url, reply_to_id)
+                if message is None:
+                    await self.send(text_data=json.dumps({'type': 'error', 'message': 'Failed to save message'}))
+                    return
+                    
+                serialized_message = await self.get_serialized_message(message)
+                if serialized_message is None:
+                    await self.send(text_data=json.dumps({'type': 'error', 'message': 'Failed to serialize message'}))
+                    return
 
-            logger.info(f'📤 Broadcasting message to group {self.room_group_name}: {serialized_message}')
+                logger.info(f'📤 Broadcasting message to group {self.room_group_name}: {serialized_message}')
 
-            # Broadcast to conversation group (for active ChatView screens)
-            await self.channel_layer.group_send(
-                self.room_group_name,
-                {
-                    'type': 'chat_message',
-                    'message': serialized_message
-                }
-            )
-
-            # Also broadcast to each participant's personal user group
-            # so they receive messages even when not on the chat screen
-            participant_ids = await self.get_participant_ids()
-            for uid in participant_ids:
-                if str(uid) != str(self.user.id):  # skip sender
-                    await self.channel_layer.group_send(
-                        f'user_{uid}',
-                        {
-                            'type': 'chat_message',
-                            'message': serialized_message
-                        }
-                    )
-            
-        elif message_type == 'read_receipt':
-            message_ids = data.get('message_ids', [])
-            if message_ids:
-                await self.mark_messages_read(message_ids)
+                # Broadcast to conversation group (for active ChatView screens)
                 await self.channel_layer.group_send(
                     self.room_group_name,
                     {
-                        'type': 'read_receipt_broadcast',
-                        'message_ids': message_ids,
-                        'reader_id': self.user.id
+                        'type': 'chat_message',
+                        'message': serialized_message
                     }
                 )
+
+                # Also broadcast to each participant's personal user group
+                # so they receive messages even when not on the chat screen
+                participant_ids = await self.get_participant_ids()
+                for uid in participant_ids:
+                    if str(uid) != str(self.user.id):  # skip sender
+                        await self.channel_layer.group_send(
+                            f'user_{uid}',
+                            {
+                                'type': 'chat_message',
+                                'message': serialized_message
+                            }
+                        )
+                
+            elif message_type == 'read_receipt':
+                message_ids = data.get('message_ids', [])
+                if message_ids:
+                    await self.mark_messages_read(message_ids)
+                    await self.channel_layer.group_send(
+                        self.room_group_name,
+                        {
+                            'type': 'read_receipt_broadcast',
+                            'message_ids': message_ids,
+                            'reader_id': self.user.id
+                        }
+                    )
+        except Exception as e:
+            logger.error(f'❌ Unhandled exception in ChatConsumer receive: {e}')
+            await self.send(text_data=json.dumps({'type': 'error', 'message': str(e)}))
 
     async def chat_message(self, event):
         message = event['message']
@@ -165,11 +173,15 @@ class ChatConsumer(AsyncWebsocketConsumer):
 
     @database_sync_to_async
     def get_serialized_message(self, message):
-        # Refresh from DB to get all related data
-        message.refresh_from_db()
-        data = MessageSerializer(message).data
-        # Convert to plain dict with all UUID/Decimal fields as strings
-        return json.loads(json.dumps(data, cls=DjangoJSONEncoder))
+        try:
+            # Refresh from DB to get all related data
+            message.refresh_from_db()
+            data = MessageSerializer(message).data
+            # Convert to plain dict with all UUID/Decimal fields as strings
+            return json.loads(json.dumps(data, cls=DjangoJSONEncoder))
+        except Exception as e:
+            logger.error(f'❌ ChatConsumer Failed to serialize message: {e}')
+            return None
 
     @database_sync_to_async
     def mark_messages_read(self, message_ids):
