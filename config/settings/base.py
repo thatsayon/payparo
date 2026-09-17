@@ -239,6 +239,50 @@ CELERY_TASK_TIME_LIMIT = 30 * 60
 GEMINI_API_KEY = env("GEMINI_API_KEY", default="")
 
 
+# OAuth: Google & Apple
+def _get_google_services_client_ids():
+    gs_file = BASE_DIR / "google-services.json"
+    ids = set()
+    if gs_file.exists():
+        try:
+            import json
+            with open(gs_file, "r") as f:
+                data = json.load(f)
+            proj = data.get("project_info", {})
+            if proj.get("project_id"):
+                ids.add(proj["project_id"])
+            for client in data.get("client", []):
+                for oauth in client.get("oauth_client", []):
+                    if oauth.get("client_id"):
+                        ids.add(oauth["client_id"])
+                services = client.get("services", {})
+                for other in services.get("appinvite_service", {}).get("other_platform_oauth_client", []):
+                    if other.get("client_id"):
+                        ids.add(other["client_id"])
+        except Exception:
+            pass
+    return list(ids)
+
+_detected_google_ids = _get_google_services_client_ids()
+
+GOOGLE_CLIENT_IDS = env.list(
+    "GOOGLE_CLIENT_IDS",
+    default=list(set([
+        "219121606484-porijm3sg1r36kjku1u2jctc4absh4lu.apps.googleusercontent.com",
+        "219121606484-7ff4ljh7qr27p72ol6jcdpqnk402q824.apps.googleusercontent.com",
+        "219121606484-qtl7lpojbqs10sv27seqeb58dhvaeiq8.apps.googleusercontent.com",
+        "219121606484-070dc40c0718e3ed7b32c1.apps.googleusercontent.com",
+        "payparo-c78c0",
+    ] + _detected_google_ids)),
+)
+APPLE_BUNDLE_IDS = env.list(
+    "APPLE_BUNDLE_IDS",
+    default=[
+        "com.payparo.app",
+    ],
+)
+
+
 # STRIPE CONFIGURATION
 STRIPE_PUBLISHABLE_KEY = env("STRIPE_PUBLISHABLE_KEY", default="")
 STRIPE_SECRET_KEY = env("STRIPE_SECRET_KEY", default="")

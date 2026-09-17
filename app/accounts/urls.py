@@ -6,6 +6,8 @@ from .views import (
     VerifyOTPView,
     ResendRegistrationOTPView,
     LoginView,
+    GoogleLoginView,
+    AppleLoginView,
     VerifyLogin2FAView,
     Resend2FALoginOTPView,
     LogoutView,
@@ -41,6 +43,8 @@ urlpatterns = [
 
     # Login / Logout
     path("login/", LoginView.as_view(), name="login"),
+    path("google/", GoogleLoginView.as_view(), name="google-login"),
+    path("apple/", AppleLoginView.as_view(), name="apple-login"),
     path("login/2fa/verify/", VerifyLogin2FAView.as_view(), name="verify-login-2fa"),
     path("login/2fa/resend/", Resend2FALoginOTPView.as_view(), name="resend-login-2fa"),
     path("logout/", LogoutView.as_view(), name="logout"),

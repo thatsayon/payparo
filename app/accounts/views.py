@@ -20,9 +20,13 @@ from .serializers import (
     FaceImageUploadSerializer,
     VerifyLogin2FASerializer,
     Toggle2FASerializer,
+    GoogleLoginSerializer,
+    AppleLoginSerializer,
 )
 from .utils import generate_otp, hash_otp, create_otp_token, decode_otp_token
 from .tokens import get_tokens_for_user
+from .social_auth import verify_google_token, verify_apple_token, resolve_or_create_social_user
+from django.core.exceptions import ValidationError
 
 User = get_user_model()
 
@@ -337,6 +341,151 @@ class LoginView(APIView):
 
         tokens = get_tokens_for_user(user)
 
+        return Response(
+            {
+                "success": True,
+                "access": tokens["access"],
+                "refresh": tokens["refresh"],
+                "kyc_status": user.kyc_status,
+                "user": {
+                    "role": user.role,
+                    "email": user.email,
+                    "full_name": user.full_name or "",
+                }
+            },
+            status=status.HTTP_200_OK,
+        )
+
+
+class GoogleLoginView(APIView):
+    """Authenticate with Google ID token; returns JWT pair."""
+    permission_classes = [permissions.AllowAny]
+
+    def post(self, request):
+        serializer = GoogleLoginSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(
+                {"error": _first_error(serializer)},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        id_token = serializer.validated_data["id_token"]
+        try:
+            google_data = verify_google_token(id_token)
+        except ValidationError as e:
+            msg = e.message if hasattr(e, "message") else str(e)
+            return Response({"error": msg}, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            return Response(
+                {"error": f"Google authentication failed: {e}"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        email = google_data.get("email") or serializer.validated_data.get("email")
+        full_name = google_data.get("name") or serializer.validated_data.get("full_name", "")
+        provider_uid = google_data.get("sub")
+
+        try:
+            user = resolve_or_create_social_user(
+                provider=User.AuthProvider.GOOGLE,
+                provider_uid=provider_uid,
+                email=email,
+                full_name=full_name,
+                picture_url=google_data.get("picture"),
+            )
+        except ValidationError as e:
+            msg = e.message if hasattr(e, "message") else str(e)
+            return Response(
+                {"error": msg},
+                status=status.HTTP_403_FORBIDDEN if "suspended" in str(msg).lower() else status.HTTP_400_BAD_REQUEST,
+            )
+
+        if user.two_factor_enabled:
+            from .tasks import send_2fa_email_task
+            token = _create_and_send_otp(user, send_2fa_email_task, purpose="2fa_login")
+            return Response(
+                {
+                    "requires_2fa": True,
+                    "method": "email",
+                    "two_factor_token": token,
+                    "message": "A verification code has been sent to your email."
+                },
+                status=status.HTTP_200_OK,
+            )
+
+        tokens = get_tokens_for_user(user)
+        return Response(
+            {
+                "success": True,
+                "access": tokens["access"],
+                "refresh": tokens["refresh"],
+                "kyc_status": user.kyc_status,
+                "user": {
+                    "role": user.role,
+                    "email": user.email,
+                    "full_name": user.full_name or "",
+                }
+            },
+            status=status.HTTP_200_OK,
+        )
+
+
+class AppleLoginView(APIView):
+    """Authenticate with Apple identity_token; returns JWT pair."""
+    permission_classes = [permissions.AllowAny]
+
+    def post(self, request):
+        serializer = AppleLoginSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(
+                {"error": _first_error(serializer)},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        identity_token = serializer.validated_data["identity_token"]
+        try:
+            apple_data = verify_apple_token(identity_token)
+        except ValidationError as e:
+            msg = e.message if hasattr(e, "message") else str(e)
+            return Response({"error": msg}, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            return Response(
+                {"error": f"Apple authentication failed: {e}"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        email = apple_data.get("email") or serializer.validated_data.get("email")
+        full_name = serializer.validated_data.get("full_name", "")
+        provider_uid = apple_data.get("sub")
+
+        try:
+            user = resolve_or_create_social_user(
+                provider=User.AuthProvider.APPLE,
+                provider_uid=provider_uid,
+                email=email,
+                full_name=full_name,
+            )
+        except ValidationError as e:
+            msg = e.message if hasattr(e, "message") else str(e)
+            return Response(
+                {"error": msg},
+                status=status.HTTP_403_FORBIDDEN if "suspended" in str(msg).lower() else status.HTTP_400_BAD_REQUEST,
+            )
+
+        if user.two_factor_enabled:
+            from .tasks import send_2fa_email_task
+            token = _create_and_send_otp(user, send_2fa_email_task, purpose="2fa_login")
+            return Response(
+                {
+                    "requires_2fa": True,
+                    "method": "email",
+                    "two_factor_token": token,
+                    "message": "A verification code has been sent to your email."
+                },
+                status=status.HTTP_200_OK,
+            )
+
+        tokens = get_tokens_for_user(user)
         return Response(
             {
                 "success": True,

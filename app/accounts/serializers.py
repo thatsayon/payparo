@@ -148,3 +148,17 @@ class AdminKYCSubmissionSerializer(serializers.ModelSerializer):
             "id", "user_email", "user_name", "status", "rejection_reason",
             "submitted_at", "reviewed_at", "identity", "documents"
         ]
+
+
+class GoogleLoginSerializer(serializers.Serializer):
+    id_token = serializers.CharField(required=True, trim_whitespace=True)
+    access_token = serializers.CharField(required=False, allow_blank=True, default="")
+    email = serializers.EmailField(required=False, allow_blank=True, default="")
+    full_name = serializers.CharField(required=False, allow_blank=True, default="")
+
+
+class AppleLoginSerializer(serializers.Serializer):
+    identity_token = serializers.CharField(required=True, trim_whitespace=True)
+    email = serializers.EmailField(required=False, allow_blank=True, default="")
+    full_name = serializers.CharField(required=False, allow_blank=True, default="")
+

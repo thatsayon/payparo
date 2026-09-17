@@ -68,6 +68,7 @@ class UserAccount(AbstractBaseUser, PermissionsMixin, BaseModel):
     class AuthProvider(models.TextChoices):
         EMAIL = "email", "Email"
         GOOGLE = "google", "Google"
+        APPLE = "apple", "Apple"
 
     class TwoFactorMethod(models.TextChoices):
         EMAIL = "email", "Email"
