@@ -413,15 +413,17 @@ class CreatePaymentIntentView(APIView):
 class StripeWebhookView(APIView):
     """
     POST — Receive Stripe webhook events.
-    Verifies the webhook signature and processes payment_intent events.
+    Verifies the webhook signature and processes payment_intent and checkout events.
     No authentication required (verified by Stripe signature instead).
     """
+    authentication_classes = []
     permission_classes = [permissions.AllowAny]
     parser_classes = [JSONParser]
 
     def post(self, request):
+        stripe.api_key = settings.STRIPE_SECRET_KEY
         payload = request.body
-        sig_header = request.META.get("HTTP_STRIPE_SIGNATURE", "")
+        sig_header = request.META.get("HTTP_STRIPE_SIGNATURE") or request.headers.get("Stripe-Signature", "")
         webhook_secret = settings.STRIPE_WEBHOOK_SECRET
 
         # If webhook secret is configured, verify signature
@@ -460,6 +462,8 @@ class StripeWebhookView(APIView):
             else event.data.object
         )
 
+        logger.info("Stripe webhook received event: %s", event_type)
+
         if event_type == "payment_intent.succeeded":
             self._handle_success(data_object)
         elif event_type == "payment_intent.payment_failed":
@@ -471,33 +475,133 @@ class StripeWebhookView(APIView):
 
     @staticmethod
     def _handle_success(payment_intent):
+        from app.accounts.models import UserAccount, UserSubscription
+        from django.utils import timezone
+        from datetime import timedelta
+
         pi_id = (
             payment_intent.get("id")
             if isinstance(payment_intent, dict)
             else payment_intent.id
         )
-        try:
-            txn = WalletTransaction.objects.select_related("wallet").get(
-                stripe_payment_intent_id=pi_id
-            )
-        except WalletTransaction.DoesNotExist:
-            logger.warning("Webhook: no transaction for PI %s", pi_id)
+
+        metadata = (
+            payment_intent.get("metadata", {})
+            if isinstance(payment_intent, dict)
+            else getattr(payment_intent, "metadata", {})
+        ) or {}
+
+        # 1. Check if existing WalletTransaction exists for this PaymentIntent
+        txn = WalletTransaction.objects.select_related("wallet").filter(
+            stripe_payment_intent_id=pi_id
+        ).first()
+
+        if txn:
+            if txn.status == WalletTransaction.Status.COMPLETED:
+                return  # idempotent
+
+            with db_transaction.atomic():
+                txn.status = WalletTransaction.Status.COMPLETED
+                txn.save(update_fields=["status", "updated_at"])
+
+                wallet = txn.wallet
+                wallet.balance += txn.amount
+                wallet.save(update_fields=["balance", "updated_at"])
+
+            logger.info("Wallet %s credited %s (PI: %s)", wallet.id, txn.amount, pi_id)
             return
 
-        if txn.status == WalletTransaction.Status.COMPLETED:
-            return  # idempotent
+        # 2. Check if this is a subscription payment
+        if metadata.get("type") == "subscription" or metadata.get("plan"):
+            user_id = metadata.get("user_id")
+            plan = metadata.get("plan", "monthly").lower()
+            if user_id:
+                try:
+                    user = UserAccount.objects.get(id=user_id)
+                    duration = timedelta(days=30 if plan == "monthly" else 365)
+                    with db_transaction.atomic():
+                        UserSubscription.objects.update_or_create(
+                            user=user,
+                            defaults={
+                                "plan": plan,
+                                "stripe_session_id": pi_id,
+                                "active_until": timezone.now() + duration,
+                                "is_active": True,
+                            },
+                        )
+                    logger.info("Webhook: Subscription activated for user %s (%s)", user_id, plan)
+                    return
+                except UserAccount.DoesNotExist:
+                    logger.warning("Webhook subscription: user not found for ID %s", user_id)
+                    return
 
-        with db_transaction.atomic():
-            txn.status = WalletTransaction.Status.COMPLETED
-            txn.save(update_fields=["status", "updated_at"])
+        # 3. Fallback: Payment was initiated directly from client without pre-created transaction
+        user = None
+        user_id = metadata.get("user_id")
+        if user_id:
+            user = UserAccount.objects.filter(id=user_id).first()
 
-            wallet = txn.wallet
-            wallet.balance += txn.amount
-            wallet.save(update_fields=["balance", "updated_at"])
+        # If not in metadata, check customer or receipt email
+        if not user:
+            receipt_email = (
+                payment_intent.get("receipt_email")
+                if isinstance(payment_intent, dict)
+                else getattr(payment_intent, "receipt_email", None)
+            )
+            customer_id = (
+                payment_intent.get("customer")
+                if isinstance(payment_intent, dict)
+                else getattr(payment_intent, "customer", None)
+            )
+            email_to_match = receipt_email
+            if not email_to_match and customer_id:
+                try:
+                    stripe.api_key = settings.STRIPE_SECRET_KEY
+                    customer = stripe.Customer.retrieve(customer_id)
+                    email_to_match = getattr(customer, "email", None)
+                except Exception:
+                    pass
 
-        logger.info(
-            "Wallet %s credited %s (PI: %s)", wallet.id, txn.amount, pi_id
-        )
+            if email_to_match:
+                user = UserAccount.objects.filter(email__iexact=email_to_match).first()
+
+        if user:
+            wallet = _get_or_create_wallet(user)
+            total_cents = (
+                payment_intent.get("amount", 0)
+                if isinstance(payment_intent, dict)
+                else getattr(payment_intent, "amount", 0)
+            )
+            total_charged = Decimal(str(total_cents)) / Decimal("100")
+
+            if metadata.get("wallet_amount"):
+                amount = Decimal(str(metadata.get("wallet_amount")))
+            else:
+                fee_percent = Decimal(str(getattr(settings, "STRIPE_FEE_PERCENT", 3))) / Decimal("100")
+                amount = (total_charged / (Decimal("1") + fee_percent)).quantize(
+                    Decimal("0.01"), rounding=ROUND_HALF_UP
+                )
+
+            fee = total_charged - amount
+
+            with db_transaction.atomic():
+                WalletTransaction.objects.create(
+                    wallet=wallet,
+                    transaction_type=WalletTransaction.TransactionType.DEPOSIT,
+                    amount=amount,
+                    fee=fee,
+                    total_charged=total_charged,
+                    stripe_payment_intent_id=pi_id,
+                    status=WalletTransaction.Status.COMPLETED,
+                    description="Wallet top-up via Stripe",
+                )
+                wallet.balance += amount
+                wallet.save(update_fields=["balance", "updated_at"])
+
+            logger.info("Wallet %s credited %s via fallback for PI %s", wallet.id, amount, pi_id)
+            return
+
+        logger.warning("Webhook: no transaction and no user found for PI %s (metadata: %s)", pi_id, metadata)
 
     @staticmethod
     def _handle_failure(payment_intent):
@@ -562,6 +666,7 @@ class StripeWebhookView(APIView):
             "User %s subscription activated. Plan: %s, active until: %s",
             user.email, plan, active_until
         )
+
 
 
 # ──────────────────────────────────────────────
