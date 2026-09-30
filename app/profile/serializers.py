@@ -96,6 +96,7 @@ class WalletTransactionSerializer(serializers.ModelSerializer):
 class ProfileHomeSerializer(serializers.ModelSerializer):
     profile_pic = serializers.SerializerMethodField()
     kyc_status = serializers.CharField(read_only=True)
+    is_subscribed = serializers.BooleanField(read_only=True)
     total_completed_escrows = serializers.SerializerMethodField()
     rating = serializers.SerializerMethodField()
 
@@ -107,6 +108,7 @@ class ProfileHomeSerializer(serializers.ModelSerializer):
             'full_name',
             'profile_pic',
             'kyc_status',
+            'is_subscribed',
             'two_factor_enabled',
             'total_completed_escrows',
             'rating'

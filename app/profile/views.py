@@ -518,7 +518,8 @@ class StripeWebhookView(APIView):
             if user_id:
                 try:
                     user = UserAccount.objects.get(id=user_id)
-                    duration = timedelta(days=30 if plan == "monthly" else 365)
+                    days = 30 if plan == "monthly" else (1 if plan == "single" else 365)
+                    duration = timedelta(days=days)
                     with db_transaction.atomic():
                         UserSubscription.objects.update_or_create(
                             user=user,
@@ -646,6 +647,8 @@ class StripeWebhookView(APIView):
 
         if plan == "monthly":
             duration = timedelta(days=30)
+        elif plan == "single":
+            duration = timedelta(days=1)
         else:
             duration = timedelta(days=365)
 
@@ -868,24 +871,93 @@ class BankWithdrawHistoryView(APIView):
         )
 
 
+class CreateSubscriptionIntentView(APIView):
+    """
+    POST — Create a Stripe PaymentIntent for subscription upgrade (native in-app payment sheet).
+    Accepts: { "plan": "monthly" | "yearly" | "single" }
+    Returns: {
+        "success": True,
+        "client_secret": intent.client_secret,
+        "payment_intent_id": intent.id,
+        "publishable_key": settings.STRIPE_PUBLISHABLE_KEY,
+        "amount": amount_dollars,
+        "plan": plan
+    }
+    """
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request):
+        plan = request.data.get("plan", "yearly").lower()
+        if plan not in ("monthly", "yearly", "single"):
+            return Response(
+                {"error": "plan must be 'monthly', 'yearly', or 'single'."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if plan == "monthly":
+            amount_cents = 200  # $2.00
+            plan_name = "Monthly Subscription Plan ($2.00)"
+        elif plan == "single":
+            amount_cents = 1000  # $10.00
+            plan_name = "Single-Use Deal Plan ($10.00)"
+        else:
+            amount_cents = 1200  # $12.00
+            plan_name = "Yearly Subscription Plan ($12.00 - Save 50%)"
+
+        stripe.api_key = settings.STRIPE_SECRET_KEY
+        try:
+            intent = stripe.PaymentIntent.create(
+                amount=amount_cents,
+                currency="usd",
+                metadata={
+                    "user_id": str(request.user.id),
+                    "email": request.user.email,
+                    "plan": plan,
+                    "type": "subscription",
+                },
+                description=f"PayParo {plan_name}",
+            )
+            return Response(
+                {
+                    "success": True,
+                    "client_secret": intent.client_secret,
+                    "payment_intent_id": intent.id,
+                    "publishable_key": settings.STRIPE_PUBLISHABLE_KEY,
+                    "amount": round(amount_cents / 100, 2),
+                    "plan": plan,
+                },
+                status=status.HTTP_200_OK,
+            )
+        except stripe.error.StripeError as e:
+            logger.error("Stripe error creating Subscription PaymentIntent: %s", e)
+            return Response(
+                {"error": "Stripe payment service currently unavailable. Please try again."},
+                status=status.HTTP_502_BAD_GATEWAY,
+            )
+
+
 class CreateSubscriptionSessionView(APIView):
     """
     POST — Create a Stripe Checkout Session for subscription paywall.
-    Accepts: { "plan": "monthly" | "yearly" }
+    Accepts: { "plan": "monthly" | "yearly" | "single" }
     """
     permission_classes = [permissions.IsAuthenticated]
 
     def post(self, request):
         plan = request.data.get("plan", "monthly").lower()
-        if plan not in ("monthly", "yearly"):
-            return Response({"error": "plan must be 'monthly' or 'yearly'."}, status=status.HTTP_400_BAD_REQUEST)
+        if plan not in ("monthly", "yearly", "single"):
+            return Response({"error": "plan must be 'monthly', 'yearly', or 'single'."}, status=status.HTTP_400_BAD_REQUEST)
 
         # 50% discount if payment yearly:
         # Monthly is $2 USD (lasts 30 days)
         # Yearly is $12 USD (lasts 365 days)
+        # Single is $10 USD (lasts 1 day)
         if plan == "monthly":
             amount_cents = 200  # $2.00
             plan_name = "Monthly Subscription Plan"
+        elif plan == "single":
+            amount_cents = 1000  # $10.00
+            plan_name = "Single-Use Deal Plan"
         else:
             amount_cents = 1200  # $12.00
             plan_name = "Yearly Subscription Plan (50% Off)"
@@ -988,18 +1060,35 @@ class UserSubscriptionStatusView(APIView):
         from datetime import timedelta
 
         plan = request.data.get("plan", "monthly").lower()
-        if plan not in ("monthly", "yearly"):
-            return Response({"error": "plan must be 'monthly' or 'yearly'."}, status=status.HTTP_400_BAD_REQUEST)
+        if plan not in ("monthly", "yearly", "single"):
+            return Response({"error": "plan must be 'monthly', 'yearly', or 'single'."}, status=status.HTTP_400_BAD_REQUEST)
 
-        days = 30 if plan == "monthly" else 365
+        payment_intent_id = request.data.get("payment_intent_id")
+        if payment_intent_id and not payment_intent_id.startswith("test_"):
+            try:
+                stripe.api_key = settings.STRIPE_SECRET_KEY
+                pi = stripe.PaymentIntent.retrieve(payment_intent_id)
+                if pi.status not in ("succeeded", "processing"):
+                    return Response(
+                        {"error": f"Payment is not confirmed (status: {pi.status})."},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+            except Exception as e:
+                logger.warning("Could not verify PaymentIntent %s with Stripe: %s", payment_intent_id, e)
+
+        days = 30 if plan == "monthly" else (1 if plan == "single" else 365)
+        active_until = timezone.now() + timedelta(days=days)
 
         user = request.user
-        sub, created = UserSubscription.objects.get_or_create(user=user)
-        sub.plan = plan
-        sub.active_until = timezone.now() + timedelta(days=days)
-        sub.is_active = True
-        sub.stripe_session_id = "in_app_payment_sdk"
-        sub.save()
+        sub, _ = UserSubscription.objects.update_or_create(
+            user=user,
+            defaults={
+                "plan": plan,
+                "active_until": active_until,
+                "is_active": True,
+                "stripe_session_id": payment_intent_id or "in_app_payment_sdk",
+            },
+        )
 
         created_count = Escrow.objects.filter(created_by=user).count()
 

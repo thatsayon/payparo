@@ -17,6 +17,7 @@ from .views import (
     PaypalWithdrawHistoryView,
     BankWithdrawHistoryView,
     CreateSubscriptionSessionView,
+    CreateSubscriptionIntentView,
     UserSubscriptionStatusView,
 )
 
@@ -29,6 +30,8 @@ urlpatterns = [
     path("wallet/add-balance/", CreatePaymentIntentView.as_view(), name="wallet-add-balance"),
     path("wallet/transactions/", TransactionHistoryView.as_view(), name="wallet-transactions"),
     path("wallet/subscription/session/", CreateSubscriptionSessionView.as_view(), name="wallet-subscription-session"),
+    path("wallet/subscription/create-intent/", CreateSubscriptionIntentView.as_view(), name="wallet-subscription-create-intent"),
+    path("wallet/subscription/intent/", CreateSubscriptionIntentView.as_view(), name="wallet-subscription-intent"),
     path("wallet/subscription/status/", UserSubscriptionStatusView.as_view(), name="wallet-subscription-status"),
 
     # Stripe webhook (no auth — verified by signature)

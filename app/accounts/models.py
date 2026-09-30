@@ -313,7 +313,8 @@ class Invitation(BaseModel):
 class UserSubscription(BaseModel):
     class PlanType(models.TextChoices):
         MONTHLY = "monthly", "Monthly ($2/mo)"
-        YEARLY  = "yearly",  "Yearly ($22/yr)"
+        YEARLY  = "yearly",  "Yearly ($12/yr)"
+        SINGLE  = "single",  "Single-Use Pass ($10)"
 
     user = models.OneToOneField(
         UserAccount,
@@ -321,7 +322,7 @@ class UserSubscription(BaseModel):
         related_name="subscription"
     )
     plan = models.CharField(
-        max_length=10,
+        max_length=15,
         choices=PlanType.choices,
     )
     stripe_session_id = models.CharField(max_length=255, blank=True, null=True)

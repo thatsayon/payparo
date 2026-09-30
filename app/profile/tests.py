@@ -98,3 +98,88 @@ class StripeWebhookTests(TestCase):
         )
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertIn("error", response.data)
+
+
+class SubscriptionEndpointTests(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.user = UserAccount.objects.create_user(
+            email="subscriber@example.com",
+            password="testpassword123",
+            full_name="Subscriber Tester",
+        )
+        self.client.force_authenticate(user=self.user)
+        self.create_intent_url = "/api/profile/wallet/subscription/create-intent/"
+        self.status_url = "/api/profile/wallet/subscription/status/"
+        self.profile_home_url = "/api/profile/home/"
+
+    @patch("stripe.PaymentIntent.create")
+    def test_create_subscription_intent_yearly(self, mock_create):
+        class MockIntent:
+            id = "pi_sub_12345"
+            client_secret = "pi_sub_12345_secret_test"
+
+        mock_create.return_value = MockIntent()
+
+        response = self.client.post(
+            self.create_intent_url,
+            data={"plan": "yearly"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertTrue(response.data["success"])
+        self.assertEqual(response.data["client_secret"], "pi_sub_12345_secret_test")
+        self.assertEqual(response.data["payment_intent_id"], "pi_sub_12345")
+        self.assertEqual(response.data["amount"], 12.0)
+        self.assertEqual(response.data["plan"], "yearly")
+
+    def test_subscription_status_flow(self):
+        # 1. Initially not subscribed
+        get_res = self.client.get(self.status_url)
+        self.assertEqual(get_res.status_code, status.HTTP_200_OK)
+        self.assertFalse(get_res.data["is_subscribed"])
+
+        # 2. Activate subscription
+        post_res = self.client.post(
+            self.status_url,
+            data={"plan": "yearly", "payment_intent_id": "test_pi_yearly"},
+            format="json",
+        )
+        self.assertEqual(post_res.status_code, status.HTTP_200_OK)
+        self.assertTrue(post_res.data["is_subscribed"])
+        self.assertEqual(post_res.data["subscription"]["plan"], "yearly")
+
+        # 3. Check profile home serializer includes is_subscribed
+        home_res = self.client.get(self.profile_home_url)
+        self.assertEqual(home_res.status_code, status.HTTP_200_OK)
+        self.assertTrue(home_res.data["is_subscribed"])
+
+    @override_settings(STRIPE_WEBHOOK_SECRET="")
+    def test_webhook_activates_subscription(self):
+        payload = {
+            "type": "payment_intent.succeeded",
+            "data": {
+                "object": {
+                    "id": "pi_webhook_sub_789",
+                    "amount": 200,
+                    "metadata": {
+                        "type": "subscription",
+                        "plan": "monthly",
+                        "user_id": str(self.user.id),
+                    },
+                }
+            },
+        }
+
+        response = self.client.post(
+            "/api/profile/wallet/webhook/stripe/",
+            data=json.dumps(payload),
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+        self.user.refresh_from_db()
+        self.assertTrue(self.user.is_subscribed)
+        self.assertEqual(self.user.subscription.plan, "monthly")
+
